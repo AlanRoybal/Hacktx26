@@ -69,25 +69,27 @@ def build_arm():
     parts = [
         lib.loft('sleeve', E + (E - W).normalized() * 0.14, E - (E - W).normalized() * 0.02, [(0, .078, .082), (0.7, .072, .075), (1, .066, .068)], 12, jersey),
         lib.loft('forearm', E, W, [(0, .052, .055), (0.3, .056, .058), (0.85, .04, .036), (1, .037, .033)], 12, skin),
-        lib.loft('tape', E, W, [(0.5, .052, .052), (0.68, .048, .047)], 12, tape),
-        lib.loft('band', E, W, [(0.8, .046, .043), (1.0, .043, .04)], 12, band),
+        lib.loft('tape', E, W, [(0.5, .057, .059), (0.68, .051, .05)], 12, tape),
+        lib.loft('band', E, W, [(0.8, .047, .044), (1.0, .044, .041)], 12, band),
     ]
-    # palm: flattened slab hugging the ball's right side, from the wrist to the finger roots
-    pc0, pc1 = Vector(on_ball(0.075, -105, 0.022)), Vector(on_ball(0.01, -92, 0.016))
-    palm = lib.loft('palm', W, pc0, [(0, .036, .03), (1, .042, .016)], 10, glove, side=(0, 0, 1))
-    palm2 = lib.loft('palm2', pc0, pc1, [(0, .046, .016), (1, .044, .014)], 10, glove, side=(0, 0, 1))
-    parts += [palm, palm2]
-    # fingers: index nearest the back tip, pinky toward the middle, each wraps from the side over the laces
-    for k, (y, reach) in enumerate(((0.052, 30), (0.028, 42), (0.004, 38), (-0.02, 22))):
-        angles = [-88, -60, -32, -6, reach * 0.5, reach]
-        pts = [on_ball(y + 0.004 * (a / 90.0), a, fr + 0.001) for a in angles]
-        parts.append(lib.tube('finger', pts, fr if k < 3 else fr * 0.9, 6, glove))
-    thumb = [on_ball(0.07, -112, 0.016), on_ball(0.062, -135, fr), on_ball(0.05, -160, fr), on_ball(0.04, -182, fr)]
-    parts.append(lib.tube('thumb', thumb, 0.012, 6, glove))
+    # palm: one continuous slab from the wrist along the ball's right side to the finger roots
+    pc0, pc1 = Vector(on_ball(0.07, -104, 0.026)), Vector(on_ball(0.016, -93, 0.02))
+    parts.append(lib.sweep('palm', [W, W.lerp(pc0, 0.5), pc0, pc1], [(.04, .033), (.046, .03), (.054, .024), (.05, .02)],
+                           12, glove, side=(0, 1, 0), tip=False))
+    # fingers: continuous tapered sweeps, index nearest the back tip, pinky toward the middle
+    for k, (y, reach, rr) in enumerate(((0.05, 34, 0.0112), (0.027, 46, 0.0115), (0.005, 40, 0.011), (-0.016, 24, 0.0095))):
+        angles = [-94, -72, -48, -24, 0, reach * 0.55, reach]
+        pts = [on_ball(y + 0.003 * (a / 90.0), a, rr + 0.0015) for a in angles]
+        rad = [(rr * 1.15, rr * 1.0), (rr * 1.1, rr), (rr, rr * 0.95), (rr * 0.98, rr * 0.92), (rr * 0.93, rr * 0.88),
+               (rr * 0.88, rr * 0.82), (rr * 0.82, rr * 0.76)]
+        parts.append(lib.sweep('finger', pts, rad, 8, glove, side=(0, 1, 0)))
+    thumb = [on_ball(0.074, -112, 0.022), on_ball(0.066, -134, 0.0135), on_ball(0.055, -156, 0.0125), on_ball(0.045, -178, 0.0115)]
+    parts.append(lib.sweep('thumb', thumb, [0.017, 0.0138, 0.0125, 0.0112], 8, glove, side=(0, 1, 0)))
     for p in parts:
         lib.box_uv(p, 0.3)
         lib.smooth(p)
     arm = lib.join(parts, 'fp_arm')
+    lib.subdivide(arm, 1)
     ball = build_ball('fp_ball', (0, 0, 0))
     root = bpy.data.objects.new('fp_root', None)
     bpy.context.scene.collection.objects.link(root)

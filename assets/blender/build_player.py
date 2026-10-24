@@ -378,6 +378,9 @@ def make_actions(rig, sfx=''):
 def build_player(colors, sfx='', offset=(0, 0, 0)):
     M = materials(colors, sfx)
     parts = build_body(M, int(colors['number']), sfx)
+    for p in parts:
+        if not p.name.startswith('num_'):
+            lib.subdivide(p, 1)
     body = lib.join(parts, 'body' + sfx)
     helm = build_helmet(M, sfx)
     for h in helm:

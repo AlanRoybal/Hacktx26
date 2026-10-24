@@ -354,13 +354,29 @@ def loft(name, a, b, rings, segs=10, material=None, side=(1, 0, 0), caps=True, s
     return smooth(ob) if smooth_shade else ob
 
 
-def tube(name, pts, r, segs=6, material=None):
-    """Polyline tube (facemask bars, chains)."""
+def tube(name, pts, r, segs=6, material=None, joints=False):
+    """Polyline tube (facemask bars, chains, fingers). r: scalar or one radius per point.
+    joints=True adds a sphere at each interior point and a rounded tip (knuckles, fingertips)."""
+    rs = list(r) if isinstance(r, (list, tuple)) else [r] * len(pts)
     parts = []
-    for p, q in zip(pts, pts[1:]):
-        parts.append(loft(name, p, q, [(0, r, r), (1, r, r)], segs, material,
+    for (p, q), (ra, rb) in zip(zip(pts, pts[1:]), zip(rs, rs[1:])):
+        parts.append(loft(name, p, q, [(0, ra, ra), (1, rb, rb)], segs, material,
                           side=(0, 0, 1) if abs(Vector(q)[2] - Vector(p)[2]) < 0.8 * (Vector(q) - Vector(p)).length else (1, 0, 0)))
+    if joints:
+        for p, rr in [(pts[-1], rs[-1])]:
+            sp = sphere(name + '_j', rr * 0.98, p, segs, max(4, segs // 2 + 1), material)
+            apply(sp)
+            parts.append(smooth(sp))
     return join(parts, name) if len(parts) > 1 else parts[0]
+
+
+def subdivide(ob, levels=1):
+    mod = ob.modifiers.new('subd', 'SUBSURF')
+    mod.levels = mod.render_levels = levels
+    bpy.context.view_layer.objects.active = ob
+    with bpy.context.temp_override(object=ob, active_object=ob):
+        bpy.ops.object.modifier_apply(modifier=mod.name)
+    return smooth(ob)
 
 
 def weights(ob, fn):
@@ -371,3 +387,34 @@ def weights(ob, fn):
             if bone not in groups:
                 groups[bone] = ob.vertex_groups.get(bone) or ob.vertex_groups.new(name=bone)
             groups[bone].add([v.index], wt, 'REPLACE')
+
+
+def sweep(name, pts, radii, segs=8, material=None, side=(0, 1, 0), tip=True):
+    """One continuous tube along a polyline (subdivides cleanly, unlike joined segments).
+    radii: per point, scalar or (rx, ry); rx lies along `side`. tip=True closes the end with a dome."""
+    P = [Vector(p) for p in pts]
+    R = [(r, r) if not isinstance(r, (list, tuple)) else r for r in radii]
+    s = Vector(side)
+    bm = bmesh.new()
+    rings = []
+
+    def ring(c, t, rx, ry):
+        u = (s - t * s.dot(t)).normalized()
+        w = t.cross(u)
+        return [bm.verts.new(c + u * (rx * math.cos(2 * math.pi * j / segs)) + w * (ry * math.sin(2 * math.pi * j / segs)))
+                for j in range(segs)]
+    for i, c in enumerate(P):
+        t = (P[min(i + 1, len(P) - 1)] - P[max(i - 1, 0)]).normalized()
+        rings.append(ring(c, t, *R[i]))
+    if tip:
+        t = (P[-1] - P[-2]).normalized()
+        rx, ry = R[-1]
+        rings.append(ring(P[-1] + t * rx * 0.55, t, rx * 0.75, ry * 0.75))
+        rings.append(ring(P[-1] + t * rx * 0.9, t, rx * 0.35, ry * 0.35))
+    for p, q in zip(rings, rings[1:]):
+        for j in range(segs):
+            bm.faces.new((p[j], p[(j + 1) % segs], q[(j + 1) % segs], q[j]))
+    bm.faces.new(rings[0][::-1])
+    bm.faces.new(rings[-1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return smooth(new_obj(name, bm, material))
