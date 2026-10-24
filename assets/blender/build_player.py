@@ -36,7 +36,18 @@ def team_image(fname):
 
 
 def materials(c, sfx=''):
-    M = {k: lib.mat(k + sfx, c[k], tex='grime') for k in ('jersey', 'pants', 'helmet', 'socks', 'gloves', 'shoes')}
+    fab = lib.grime('fabric', 128, 0.86, 1.0, seed=3, blotch=2, streak=0.12)
+    look = {'jersey': (0.8, 'fabric'), 'pants': (0.42, 'fabric'), 'helmet': (0.16, None),
+            'socks': (0.9, 'fabric'), 'gloves': (0.55, None), 'shoes': (0.32, None)}
+    M = {k: lib.mat(k + sfx, c[k], rough=r, tex=t) for k, (r, t) in look.items()}
+    for k in ('jersey', 'pants', 'socks'):
+        for n in M[k].node_tree.nodes:
+            if n.type == 'TEX_IMAGE':
+                n.interpolation = 'Linear'
+    hb = M['helmet'].node_tree.nodes['Principled BSDF']
+    hb.inputs['Coat Weight'].default_value = 1.0
+    hb.inputs['Coat Roughness'].default_value = 0.05
+    M['pants'].node_tree.nodes['Principled BSDF'].inputs['Sheen Weight'].default_value = 0.6
     M['facemask'] = lib.mat('facemask' + sfx, c['facemask'], rough=0.5, tex=None)
     M['skin'] = lib.mat('skin' + sfx, c['skin'], rough=0.7, tex='grime_skin')
     M['tape'] = lib.mat('tape', '#E6E2D8', tex='grime')
@@ -47,7 +58,7 @@ def materials(c, sfx=''):
     return M
 
 
-TORSO = [(1.00, .165, .118), (1.12, .175, .122), (1.24, .195, .13), (1.36, .228, .142), (1.46, .255, .15), (1.53, .235, .14)]
+TORSO = [(1.00, .152, .112), (1.12, .158, .116), (1.24, .185, .126), (1.36, .238, .145), (1.46, .272, .156), (1.53, .25, .146)]
 
 
 def torso_r(z):
@@ -131,28 +142,41 @@ def build_body(M, number, sfx=''):
         parts.append(ob)
         return ob
 
-    pants = [(0.0, .158, .118), (0.35, .172, .125), (0.75, .17, .12), (1.0, .166, .118)]
+    pants = [(0.0, .172, .128), (0.3, .186, .136), (0.7, .172, .124), (1.0, .156, .114)]
     add(lib.loft('pelvis', (0, 0, 0.86), (0, 0, 1.08), pants, 14, M['pants']), torso_w)
     add(lib.loft('belt', (0, 0, 1.02), (0, 0, 1.05), [(0, .169, .121), (1, .169, .121)], 14, M['sole']), torso_w)
     jt = [((z - 1.0) / 0.53, a, b) for z, a, b in TORSO]
     add(lib.loft('torso', (0, 0, 1.0), (0, 0, 1.53), jt, 14, M['jersey']), torso_w)
-    pads = lib.sphere('pads', 1.0, (0, 0.005, 1.465), 20, 10, M['jersey'], scale=(0.325, 0.19, 0.105))
+    add(lib.loft('neckroll', (0, 0, 1.53), (0, 0, 1.6), [(0, .118, .106), (0.5, .108, .098), (1, .088, .082)], 14, M['jersey']), bone='chest')
+    pads = lib.sphere('pads', 1.0, (0, 0.005, 1.485), 28, 14, M['jersey'], scale=(0.33, 0.19, 0.12))
     lib.apply(pads)
+    for v in pads.data.vertices:   # flat-topped plate with a squared front edge instead of a dome
+        c = v.co
+        if c.z > 1.485:
+            c.z = 1.485 + (c.z - 1.485) * 0.62
+        c.y = 0.005 + (c.y - 0.005) * (1.0 + 0.18 * min(1.0, abs(c.x) / 0.25))
     add(lib.smooth(pads), bone='chest')
     for s, x in (('L', 1), ('R', -1)):
-        ep = lib.sphere(f'epaulet_{s}', 1.0, (0.255 * x, 0.0, 1.505), 12, 7, M['jersey'], scale=(0.115, 0.15, 0.07))
+        ep = lib.sphere(f'epaulet_{s}', 1.0, (0.262 * x, 0.0, 1.52), 18, 9, M['jersey'], scale=(0.125, 0.162, 0.058))
         lib.apply(ep)
+        for v in ep.data.vertices:   # cap curls down over the deltoid
+            d = (v.co.x * x - 0.262) / 0.125
+            if d > 0:
+                v.co.z -= 0.05 * d * d
         add(lib.smooth(ep), bone='chest')
         _, sh, el, _ = B[f'upperarm_{s}']
         _, _, wr, _ = B[f'forearm_{s}']
         _, _, ht, _ = B[f'hand_{s}']
-        sl = lib.loft(f'sleeve_{s}', sh, el, [(0.0, .095, .1), (0.25, .092, .095), (0.42, .082, .085)], 10, M['jersey'])
+        sl = lib.loft(f'sleeve_{s}', sh, el, [(0.0, 0.106, 0.112), (0.25, 0.103, 0.106), (0.42, 0.092, 0.095)], 10, M['jersey'])
         add(limb_w(sl, f'upperarm_{s}'))
-        ua = lib.loft(f'upperarm_{s}', sh, el, [(0.0, .072, .078), (0.35, .079, .084), (0.62, .07, .074), (0.88, .056, .058), (1.0, .053, .055)], 14, M['skin'])
+        ua = lib.loft(f'upperarm_{s}', sh, el, [(0.0, 0.082, 0.089), (0.35, 0.090, 0.096), (0.62, 0.080, 0.084), (0.88, 0.064, 0.066), (1.0, 0.060, 0.063)], 14, M['skin'])
         add(limb_w(ua, f'upperarm_{s}', child=f'forearm_{s}'))
-        fa = lib.loft(f'forearm_{s}', el, wr, [(0.0, .053, .055), (0.2, .063, .067), (0.45, .058, .061), (0.8, .042, .039), (1.0, .037, .034)], 14, M['skin'])
+        fa = lib.loft(f'forearm_{s}', el, wr, [(0.0, 0.058, 0.061), (0.2, 0.069, 0.074), (0.45, 0.064, 0.067), (0.8, 0.046, 0.043), (1.0, 0.041, 0.037)], 14, M['skin'])
         add(limb_w(fa, f'forearm_{s}', parent=f'upperarm_{s}'))
-        tp = lib.loft(f'tape_{s}', el, wr, [(0.78, .047, .045), (1.0, .042, .04)], 10, M['tape'])
+        eb = lib.sphere(f'elbow_{s}', 1.0, el, 12, 8, M['skin'], scale=(0.06, 0.062, 0.06))
+        lib.apply(eb)
+        add(lib.smooth(eb), fn=lambda i, co, s=s: {f'upperarm_{s}': 0.5, f'forearm_{s}': 0.5})
+        tp = lib.loft(f'tape_{s}', el, wr, [(0.78, 0.052, 0.050), (1.0, 0.046, 0.044)], 10, M['tape'])
         add(limb_w(tp, f'forearm_{s}'))
         hd = lib.loft(f'glove_{s}', wr, ht, [(0.0, .03, .04), (0.45, .028, .05), (0.8, .022, .046), (1.0, .015, .03)], 8, M['gloves'])
         add(limb_w(hd, f'hand_{s}'))
@@ -161,13 +185,16 @@ def build_body(M, number, sfx=''):
         add(limb_w(tb, f'hand_{s}'))
         _, hp, kn, _ = B[f'thigh_{s}']
         _, _, an, _ = B[f'shin_{s}']
-        tg = lib.loft(f'thigh_{s}', hp, kn, [(0.0, .105, .115), (0.3, .104, .115), (0.6, .09, .097), (0.85, .074, .079), (1.0, .066, .07)], 14, M['pants'])
+        tg = lib.loft(f'thigh_{s}', hp, kn, [(0.0, 0.126, 0.138), (0.3, 0.125, 0.138), (0.6, 0.108, 0.116), (0.85, 0.089, 0.095), (1.0, 0.079, 0.084)], 14, M['pants'])
         add(limb_w(tg, f'thigh_{s}', parent='hips', child=f'shin_{s}', t0=0.12, t1=0.9))
-        kp = lib.loft(f'kneepad_{s}', hp, kn, [(0.84, .068, .074, 0, 0.012), (0.98, .07, .078, 0, 0.016), (1.08, .064, .07, 0, 0.012)], 10, M['pants'])
+        kp = lib.loft(f'kneepad_{s}', hp, kn, [(0.86, 0.08, 0.086, 0, 0.006), (0.98, 0.082, 0.09, 0, 0.009), (1.06, 0.077, 0.083, 0, 0.006)], 10, M['pants'])
         add(limb_w(kp, f'thigh_{s}', child=f'shin_{s}', t1=0.95))
-        sp = lib.loft(f'shin_pants_{s}', kn, an, [(0.0, .066, .07), (0.17, .061, .066)], 10, M['pants'])
+        kb = lib.sphere(f'knee_{s}', 1.0, kn, 12, 8, M['pants'], scale=(0.08, 0.084, 0.078))
+        lib.apply(kb)
+        add(lib.smooth(kb), fn=lambda i, co, s=s: {f'thigh_{s}': 0.5, f'shin_{s}': 0.5})
+        sp = lib.loft(f'shin_pants_{s}', kn, an, [(0.0, 0.079, 0.084), (0.17, 0.073, 0.079)], 10, M['pants'])
         add(limb_w(sp, f'shin_{s}', parent=f'thigh_{s}', t0=0.1))
-        sk = lib.loft(f'sock_{s}', kn, an, [(0.12, .06, .064), (0.32, .066, .078, 0, -0.014), (0.55, .058, .066, 0, -0.008), (0.82, .042, .045), (1.0, .036, .04)], 14, M['socks'])
+        sk = lib.loft(f'sock_{s}', kn, an, [(0.12, 0.067, 0.072), (0.32, 0.074, 0.087, 0, -0.014), (0.55, 0.065, 0.074, 0, -0.008), (0.82, 0.047, 0.050), (1.0, 0.040, 0.045)], 14, M['socks'])
         add(limb_w(sk, f'shin_{s}'))
         hx = 0.12 * x
         cl = lib.loft(f'cleat_{s}', (hx, 0.075, 0.07), (hx, -0.175, 0.045),
@@ -176,7 +203,7 @@ def build_body(M, number, sfx=''):
         so = lib.box(f'sole_{s}', (0.1, 0.25, 0.018), (hx, -0.05, 0.012), M['sole'])
         lib.apply(so)
         add(so, bone=f'foot_{s}')
-    nk = lib.loft('neck', (0, 0, 1.47), (0, 0, 1.66), [(0, .068, .07), (1, .06, .062)], 10, M['skin'])
+    nk = lib.loft('neck', (0, 0, 1.47), (0, 0, 1.66), [(0, .082, .084), (1, .066, .068)], 10, M['skin'])
     add(nk, lambda i, co: ramp(co.z, 1.58, 1.66, 'neck', 'head'))
     hdm = lib.sphere('head', 1.0, (0, -0.005, 1.735), 12, 8, M['skin'], scale=(0.095, 0.105, 0.115))
     lib.apply(hdm)
