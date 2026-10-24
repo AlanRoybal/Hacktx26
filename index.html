@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Red River QB</title>
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="/src/ui/style.css" />
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="hud">
+    <div id="scorebug">
+      <div class="team tex"><span>TEX</span><b id="sTex">27</b></div>
+      <div class="team ou"><span>OU</span><b id="sOu">31</b></div>
+      <div class="cell" id="sQtr">4TH</div>
+      <div class="cell" id="sClock">1:45</div>
+      <div class="cell dd" id="sDown">1ST &amp; 10</div>
+      <div class="cell" id="sSpot">OU 45</div>
+    </div>
+    <div id="banner"><div id="bMain"></div><div id="bSub"></div></div>
+    <div id="stat"></div>
+    <div id="plays"></div>
+    <div id="hint"></div>
+    <div id="pill"><i></i><span>MOUSE</span></div>
+    <div id="debug"></div>
+    <div id="cross"></div>
+    <div id="screen"></div>
+    <div id="loading">LOADING</div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

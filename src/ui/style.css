@@ -1,0 +1,38 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; background: #000; overflow: hidden; cursor: crosshair; user-select: none; }
+canvas#c { position: fixed; inset: 0; width: 100vw; height: 100vh; image-rendering: pixelated; }
+#hud { position: fixed; inset: 0; pointer-events: none; font-family: "SF Mono", Menlo, Consolas, monospace; color: #f2e6d6; }
+#hud::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgba(0,0,0,.16) 0 1px, transparent 1px 3px); }
+#scorebug { position: absolute; bottom: 4vh; left: 50%; transform: translateX(-50%); display: flex; height: 52px; background: #0a0a0c; border: 2px solid #2a2622; font-weight: 800; font-size: 22px; letter-spacing: 1px; }
+#scorebug .team { display: flex; align-items: center; gap: 14px; padding: 0 18px; }
+#scorebug .tex { background: #BF5700; color: #fff; } #scorebug .ou { background: #841617; color: #FDF9D8; }
+#scorebug b { font-size: 28px; }
+#scorebug .cell { display: flex; align-items: center; padding: 0 16px; border-left: 1px solid #2a2622; }
+#scorebug .dd { color: #F2C14E; }
+#banner { position: absolute; top: 24vh; width: 100%; text-align: center; opacity: 0; transition: opacity .15s; }
+#banner.on { opacity: 1; }
+#bMain { font: 900 9vh Impact, "Oswald", sans-serif; letter-spacing: .06em; color: #fff; text-shadow: 0 0 24px rgba(0,0,0,.8), 4px 4px 0 var(--c, #BF5700); }
+#bSub { font-size: 2.6vh; color: #FFB066; margin-top: 8px; letter-spacing: .2em; }
+#stat { position: absolute; top: 4vh; right: 3vw; padding: 14px 18px; background: rgba(10,10,12,.8); border-left: 4px solid #BF5700; font-size: 18px; line-height: 1.5; opacity: 0; transition: opacity .2s; }
+#stat.on { opacity: 1; }
+#plays { position: absolute; bottom: 13vh; width: 100%; display: flex; justify-content: center; gap: 14px; opacity: 0; transition: opacity .2s; }
+#plays.on { opacity: 1; }
+.card { width: 210px; padding: 10px 12px; background: rgba(10,10,12,.85); border: 2px solid #3a332b; }
+.card.sel { border-color: #BF5700; background: rgba(60,25,0,.9); }
+.card h3 { font-size: 16px; color: #FF8A2A; letter-spacing: 1px; } .card p { font-size: 12px; color: #c9bba8; margin-top: 4px; }
+.card svg { width: 100%; height: 70px; margin-top: 6px; }
+.card .k { float: right; color: #776a5c; }
+#hint { position: absolute; bottom: 10vh; width: 100%; text-align: center; font-size: 18px; letter-spacing: .25em; color: #FFB066; text-shadow: 0 0 8px #000; }
+#pill { position: absolute; top: 3vh; left: 2vw; display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 6px 10px; background: rgba(10,10,12,.75); }
+#pill i { width: 10px; height: 10px; border-radius: 50%; background: #c33; } #pill.ok i { background: #3c3; }
+#debug { position: absolute; top: 8vh; left: 2vw; font-size: 12px; white-space: pre; color: #9fe39f; display: none; background: rgba(0,0,0,.6); padding: 8px; }
+#cross { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border: 2px solid rgba(255,176,102,.85); border-radius: 50%; display: none; }
+#screen { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: radial-gradient(ellipse at center, rgba(0,0,0,.25), rgba(0,0,0,.8)); }
+#screen.on { display: flex; }
+#screen h1 { font: 900 16vh Impact, "Oswald", sans-serif; letter-spacing: .05em; color: #BF5700; text-shadow: 6px 6px 0 #841617; }
+#screen h2 { font-size: 3vh; letter-spacing: .4em; color: #FDF9D8; margin-top: 1vh; }
+#screen .big { font: 900 10vh Impact, sans-serif; color: #fff; }
+#screen p { margin-top: 3vh; font-size: 2.4vh; letter-spacing: .2em; color: #FFB066; animation: blink 1.2s steps(2) infinite; }
+#screen table { margin-top: 3vh; font-size: 2.4vh; border-collapse: collapse; } #screen td { padding: 4px 22px; text-align: left; } #screen td:last-child { color: #FF8A2A; text-align: right; }
+@keyframes blink { 50% { opacity: .35; } }
+#loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: #000; font-size: 22px; letter-spacing: .4em; color: #BF5700; }

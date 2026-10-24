@@ -84,9 +84,10 @@ export class World {
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(1);
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.15;
+    this.renderer.toneMapping = THREE.NeutralToneMapping;
+    this.renderer.toneMappingExposure = 1.3;
     this.renderer.shadowMap.enabled = true;
+    this.renderer.info.autoReset = false;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.scene.background = new THREE.Color('#05070D');
     this.scene.fog = new THREE.FogExp2('#06080f', 0.0105);
@@ -114,12 +115,16 @@ export class World {
       m.receiveShadow = m.name === 'field' || m.name === 'apron';
       const mat = m.material as THREE.MeshStandardMaterial;
       const name = mat.name;
+      if (['screen', 'screen_ribbon', 'ribbon', 'screen_north'].includes(m.name)) {   // glTF v-down -> GL v-up for canvas/RT textures
+        const uv = m.geometry.attributes.uv;
+        for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i));
+      }
       if (name === 'beam') {
         const b = new THREE.MeshBasicMaterial({ color: '#FFF1D6', transparent: true, opacity: 0.05, blending: THREE.AdditiveBlending,
           depthWrite: false, side: THREE.DoubleSide, fog: false });
         m.material = b; this.beams.push(b); m.renderOrder = 5;
       } else if (name === 'screen' || name === 'screen_north') {
-        const s = new THREE.MeshBasicMaterial({ map: name === 'screen' ? this.jumboRT.texture : mat.emissiveMap, fog: false, toneMapped: false });
+        const s = new THREE.MeshBasicMaterial({ map: name === 'screen' ? this.jumboRT.texture : loadTex('jumbo_idle.png'), fog: false, toneMapped: false });
         if (name === 'screen') this.screenMat = s;
         m.material = s;
       } else if (name === 'ribbon' || name === 'ribbon_jumbo') {
@@ -297,11 +302,13 @@ export class World {
 
   render(t: number) {
     this.frame++;
+    this.renderer.info.reset();
     if (this.jumboMode === 'live' && this.frame % 2 === 0) {
+      const vis = this.fpArm.visible;
       this.fpArm.visible = false;
       this.renderer.setRenderTarget(this.jumboRT);
       this.renderer.render(this.scene, this.jumboCam);
-      this.fpArm.visible = true;
+      this.fpArm.visible = vis;
     }
     const sx = (Math.random() - 0.5) * this.shake, sy = (Math.random() - 0.5) * this.shake;
     this.camera.position.x += sx; this.camera.position.y += sy;
