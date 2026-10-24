@@ -148,9 +148,9 @@ def build_body(M, number, sfx=''):
         _, _, ht, _ = B[f'hand_{s}']
         sl = lib.loft(f'sleeve_{s}', sh, el, [(0.0, .095, .1), (0.25, .092, .095), (0.42, .082, .085)], 10, M['jersey'])
         add(limb_w(sl, f'upperarm_{s}'))
-        ua = lib.loft(f'upperarm_{s}', sh, el, [(0.0, .07, .075), (0.5, .07, .073), (0.9, .058, .06), (1.0, .055, .057)], 10, M['skin'])
+        ua = lib.loft(f'upperarm_{s}', sh, el, [(0.0, .072, .078), (0.35, .079, .084), (0.62, .07, .074), (0.88, .056, .058), (1.0, .053, .055)], 14, M['skin'])
         add(limb_w(ua, f'upperarm_{s}', child=f'forearm_{s}'))
-        fa = lib.loft(f'forearm_{s}', el, wr, [(0.0, .055, .057), (0.3, .058, .062), (0.8, .043, .04), (1.0, .038, .035)], 10, M['skin'])
+        fa = lib.loft(f'forearm_{s}', el, wr, [(0.0, .053, .055), (0.2, .063, .067), (0.45, .058, .061), (0.8, .042, .039), (1.0, .037, .034)], 14, M['skin'])
         add(limb_w(fa, f'forearm_{s}', parent=f'upperarm_{s}'))
         tp = lib.loft(f'tape_{s}', el, wr, [(0.78, .047, .045), (1.0, .042, .04)], 10, M['tape'])
         add(limb_w(tp, f'forearm_{s}'))
@@ -161,13 +161,13 @@ def build_body(M, number, sfx=''):
         add(limb_w(tb, f'hand_{s}'))
         _, hp, kn, _ = B[f'thigh_{s}']
         _, _, an, _ = B[f'shin_{s}']
-        tg = lib.loft(f'thigh_{s}', hp, kn, [(0.0, .1, .11), (0.3, .097, .108), (0.75, .076, .082), (1.0, .066, .07)], 10, M['pants'])
+        tg = lib.loft(f'thigh_{s}', hp, kn, [(0.0, .105, .115), (0.3, .104, .115), (0.6, .09, .097), (0.85, .074, .079), (1.0, .066, .07)], 14, M['pants'])
         add(limb_w(tg, f'thigh_{s}', parent='hips', child=f'shin_{s}', t0=0.12, t1=0.9))
         kp = lib.loft(f'kneepad_{s}', hp, kn, [(0.84, .068, .074, 0, 0.012), (0.98, .07, .078, 0, 0.016), (1.08, .064, .07, 0, 0.012)], 10, M['pants'])
         add(limb_w(kp, f'thigh_{s}', child=f'shin_{s}', t1=0.95))
         sp = lib.loft(f'shin_pants_{s}', kn, an, [(0.0, .066, .07), (0.17, .061, .066)], 10, M['pants'])
         add(limb_w(sp, f'shin_{s}', parent=f'thigh_{s}', t0=0.1))
-        sk = lib.loft(f'sock_{s}', kn, an, [(0.12, .058, .062), (0.42, .058, .07, 0, -0.012), (0.8, .042, .045), (1.0, .036, .04)], 10, M['socks'])
+        sk = lib.loft(f'sock_{s}', kn, an, [(0.12, .06, .064), (0.32, .066, .078, 0, -0.014), (0.55, .058, .066, 0, -0.008), (0.82, .042, .045), (1.0, .036, .04)], 14, M['socks'])
         add(limb_w(sk, f'shin_{s}'))
         hx = 0.12 * x
         cl = lib.loft(f'cleat_{s}', (hx, 0.075, 0.07), (hx, -0.175, 0.045),
@@ -189,11 +189,21 @@ def build_body(M, number, sfx=''):
 
 
 def build_helmet(M, sfx=''):
-    shell = lib.sphere('helmet' + sfx, 1.0, (0, 0.012, 1.752), 20, 12, M['helmet'], scale=(0.148, 0.168, 0.152))
+    shell = lib.sphere('helmet' + sfx, 1.0, (0, 0.012, 1.752), 32, 18, M['helmet'], scale=(0.148, 0.168, 0.152))
     lib.apply(shell)
     bm = bmesh.new()
     bm.from_mesh(shell.data)
-    kill = [f for f in bm.faces if (lambda c: (c.y < -0.05 and c.z < 1.775 and abs(c.x) < 0.108) or c.z < 1.63)(f.calc_center_median())]
+    for v in bm.verts:   # jaw guards flare out and down; back of the shell sits lower over the neck
+        c = v.co
+        if c.z < 1.72:
+            k = (1.72 - c.z) / 0.12
+            c.x *= 1 + 0.12 * k
+            if c.y > 0.02:
+                c.z -= 0.025 * k
+        if c.z > 1.82:
+            c.y += 0.01 * (c.z - 1.82) / 0.08
+    ear = lambda c: (abs(c.x) > 0.12 and abs(c.y - 0.0) < 0.022 and abs(c.z - 1.705) < 0.02)
+    kill = [f for f in bm.faces if (lambda c: (c.y < -0.05 and c.z < 1.775 and abs(c.x) < 0.108) or c.z < 1.615 or ear(c))(f.calc_center_median())]
     bmesh.ops.delete(bm, geom=kill, context='FACES')
     bm.to_mesh(shell.data)
     bm.free()
@@ -208,7 +218,13 @@ def build_helmet(M, sfx=''):
         bars.append(lib.tube('bar', [(0.075 * x, -0.155, 1.776), (0.075 * x, -0.16, 1.716), (0.068 * x, -0.168, 1.65)], r, 6, M['facemask']))
     mask = lib.join(bars, 'facemask' + sfx)
     strap = lib.tube('chinstrap', [(-0.125, -0.07, 1.665), (-0.06, -0.13, 1.61), (0, -0.14, 1.6), (0.06, -0.13, 1.61), (0.125, -0.07, 1.665)], 0.011, 6, M['tape'])
-    mask = lib.join([mask, strap], 'facemask' + sfx)
+    bump = lib.mat('bumper', '#1A1A1A', rough=0.6, tex=None)
+    front = lib.sweep('bumper_f', [(-0.07, -0.158, 1.79), (0, -0.172, 1.795), (0.07, -0.158, 1.79)], [(.012, .007)] * 3, 8, bump, side=(0, 0, 1), tip=False)
+    rear = lib.sweep('bumper_r', [(-0.06, 0.168, 1.67), (0, 0.18, 1.665), (0.06, 0.168, 1.67)], [(.014, .008)] * 3, 8, bump, side=(0, 0, 1), tip=False)
+    cups = [lib.sphere('chin_cup', 1.0, (0, -0.15, 1.598), 10, 6, M['tape'], scale=(0.04, 0.022, 0.028))]
+    for c in cups:
+        lib.apply(c)
+    mask = lib.join([mask, strap, front, rear] + cups, 'facemask' + sfx)
     logos = [lib.quad('logo_L', (0.151, 0.02, 1.755), (0, 1, 0), (0, 0, 1), 0.13, 0.065, M['helmet_logo']),
              lib.quad('logo_R', (-0.151, 0.02, 1.755), (0, -1, 0), (0, 0, 1), 0.13, 0.065, M['helmet_logo'])]
     logo = lib.join(logos, 'helmet_logo' + sfx)

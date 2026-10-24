@@ -49,11 +49,11 @@ for k, n in enumerate([10, 20, 30, 40, 50, 40, 30, 20, 10]):
     text_rot(img, str(n), (x, 9 * PX), 2 * PX + 14, white, 180)
 text_rot(img, 'TEXAS', (5 * PX, H / 2), 6 * PX, white, 90)
 text_rot(img, 'OKLAHOMA', (115 * PX, H / 2), 5 * PX, (253, 249, 216, 255), -90)
-cx, cy, r = W / 2, H / 2, 6 * PX
-d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(20, 20, 20, 255), outline=white, width=6)
-d.pieslice([cx - r + 8, cy - r + 8, cx + r - 8, cy + r - 8], 90, 270, fill=(191, 87, 0, 255))
-d.pieslice([cx - r + 8, cy - r + 8, cx + r - 8, cy + r - 8], 270, 90, fill=(132, 22, 23, 255))
-text_rot(img, 'RED RIVER', (cx, cy), int(1.6 * PX), white, 0)
+cx, cy = W / 2, H / 2
+logo = Image.open(os.path.join(os.path.dirname(OUT), 'rrr_Allstate_Red_River_Rivalry_logo.png')).convert('RGBA')
+sz = int(14 * PX)
+logo = logo.resize((sz, sz), Image.LANCZOS)
+img.alpha_composite(logo, (int(cx - sz / 2), int(cy - sz / 2)))
 a = np.asarray(img).astype(np.float32)
 rng = np.random.default_rng(3)
 noise = rng.uniform(0.86, 1.0, (H // 4 + 1, W // 4 + 1)).repeat(4, 0).repeat(4, 1)[:H, :W, None]
