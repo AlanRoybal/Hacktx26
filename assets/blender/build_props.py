@@ -63,18 +63,62 @@ def bench(name, loc=(0, 0, 0), team='#BF5700'):
     return finish(parts, name, 1.0, loc)
 
 
-def crowd_unit(name, loc=(0, 0, 0)):
-    """~90 tri fan: torso, head, arms raised. Faces -Y. Code instances it and sets per-instance color."""
+CALM_ARMS = [[(0.19, 0, 0.66), (0.23, -0.07, 0.46), (0.07, -0.2, 0.52)], [(-0.19, 0, 0.66), (-0.23, -0.07, 0.46), (-0.07, -0.2, 0.52)]]
+HYPE_ARMS = [[(0.19, 0, 0.66), (0.27, -0.06, 0.92), (0.25, -0.04, 1.17)], [(-0.19, 0, 0.66), (-0.27, -0.06, 0.92), (-0.25, -0.04, 1.17)]]
+SIGN_CALM = dict(arms=[[(0.19, 0, 0.66), (0.24, -0.12, 0.6), (0.2, -0.24, 0.78)], [(-0.19, 0, 0.66), (-0.24, -0.12, 0.6), (-0.2, -0.24, 0.78)]],
+                 board=(0, -0.27, 0.88))
+SIGN_HYPE = dict(arms=[[(0.19, 0, 0.66), (0.25, -0.08, 0.95), (0.22, -0.12, 1.24)], [(-0.19, 0, 0.66), (-0.25, -0.08, 0.95), (-0.22, -0.12, 1.24)]],
+                 board=(0, -0.15, 1.42))
+
+
+def fan(name, arms, lift=0.0, board=None):
     shirt = lib.mat('crowd_shirt', '#FFFFFF', tex='grime')
     skin = lib.mat('crowd_skin', '#A06E4C', rough=0.8, tex=None)
-    parts = [lib.loft('torso', (0, 0, 0.2), (0, 0, 0.72), [(0, .2, .13), (0.6, .21, .12), (1, .17, .1)], 6, shirt),
-             lib.loft('neck', (0, 0, 0.7), (0, 0, 0.78), [(0, .05, .05), (1, .045, .045)], 4, skin)]
-    hd = lib.sphere('head', 1.0, (0, -0.01, 0.87), 6, 5, skin, scale=(0.095, 0.105, 0.115))
-    lib.apply(hd)
-    parts.append(lib.smooth(hd))
-    for x in (1, -1):
-        parts.append(lib.tube('arm', [(0.19 * x, 0, 0.66), (0.26 * x, -0.06, 0.92), (0.24 * x, -0.04, 1.16)], 0.045, 4, shirt))
-    return finish(parts, name, 0.5, loc)
+    z = lambda p: (p[0], p[1], p[2] + lift)
+    parts = [lib.loft('torso', z((0, 0, 0.2)), z((0, 0, 0.72)), [(0, .2, .13), (0.6, .21, .12), (1, .17, .1)], 6, shirt),
+             lib.loft('neck', z((0, 0, 0.7)), z((0, 0, 0.78)), [(0, .05, .05), (1, .045, .045)], 4, skin)]
+    hd = lib.sphere('head', 1.0, z((0, -0.01, 0.87)), 6, 5, skin, scale=(0.095, 0.105, 0.115))
+    parts.append(hd)
+    for pts in arms:
+        parts.append(lib.tube('arm', [z(q) for q in pts], 0.045, 4, shirt))
+    ob = finish(parts, name, 0.5)
+    lib.smooth(ob)
+    if board:
+        sm = lib.mat('crowd_sign', '#FFFFFF', rough=0.7, image=lib.load_tex('crowd_signs.png'))
+        back = lib.mat('crowd_sign_back', '#B8A27A', tex='grime')
+        c = z(board)
+        front = lib.quad('sign', c, (-1, 0, 0), (0, 0, 1), 0.9, 0.45, sm)
+        for l in front.data.loops:
+            uv = front.data.uv_layers['UVMap'].data[l.index].uv
+            uv[0], uv[1] = uv[0] * 0.25, 0.5 + uv[1] * 0.5
+        rear = lib.quad('sign_back', (c[0], c[1] + 0.01, c[2]), (1, 0, 0), (0, 0, 1), 0.9, 0.45, back)
+        ob = lib.join([ob, front, rear], name)
+    return ob
+
+
+def with_hype(base, hype):
+    """Adds shape key 'hype' (exported as glTF morph target; three.js InstancedMesh.setMorphAt per fan)."""
+    base.shape_key_add(name='Basis')
+    k = base.shape_key_add(name='hype')
+    for i, v in enumerate(hype.data.vertices):
+        k.data[i].co = v.co
+    bpy.data.objects.remove(hype)
+    return base
+
+
+def crowd_unit(name, loc=(0, 0, 0)):
+    """~90 tri fan facing -Y. Basis = standing/clapping, 'hype' = jumping with arms up. Code tints per instance."""
+    ob = with_hype(fan(name, CALM_ARMS), fan(name + '_h', HYPE_ARMS, lift=0.12))
+    ob.location = loc
+    return ob
+
+
+def crowd_sign(name, loc=(0, 0, 0)):
+    """Fan holding a sign. UVs point at atlas cell 0; code offsets u by 0.25*col and v by -0.5 for OU signs."""
+    ob = with_hype(fan(name, SIGN_CALM['arms'], board=SIGN_CALM['board']),
+                   fan(name + '_h', SIGN_HYPE['arms'], lift=0.08, board=SIGN_HYPE['board']))
+    ob.location = loc
+    return ob
 
 
 def cannon(name, loc=(0, 0, 0)):
@@ -103,7 +147,7 @@ def build(offset=True):
     objs += [pylon(f'pylon_{i}', (sp * 4 + i * 0.3, 0, 0)) for i in range(8)]
     objs += [chain_set('chains', (sp * 5, 0, 0)), down_marker('down_marker', (sp * 5.5, 0, 0)),
              bench('bench_texas', (sp * 6, 0, 0), '#BF5700'), bench('bench_ou', (sp * 7, 0, 0), '#841617'),
-             crowd_unit('crowd_unit', (sp * 8, 0, 0))]
+             crowd_unit('crowd_unit', (sp * 8, 0, 0)), crowd_sign('crowd_sign', (sp * 8.5, 0, 0))]
     c, m = cannon('smokey', (sp * 9, 0, 0))
     return objs + [c, m]
 

@@ -1,6 +1,7 @@
 """Cotton Bowl at night: field, two-tier bowl, sideline wall, light towers, scoreboard, press box, light beams.
 Field length runs along Blender Y (OKLAHOMA end zone at -Y, where Texas drives). blender -b --python assets/blender/build_stadium.py"""
 import sys, os, math, json, subprocess
+subprocess.run(['python3', os.path.join(os.path.dirname(__file__), 'make_pulse_textures.py')], check=True)
 sys.path.insert(0, os.path.dirname(__file__))
 import bpy, bmesh
 import numpy as np
@@ -115,6 +116,7 @@ def build_wall():
 def build_tower(name, base, target):
     steel = lib.mat('steel', '#4A4C50', rough=0.6, metal=0.4, tex='grime')
     lamp = lib.mat('lamp', '#FFF3DC', rough=0.3, tex=None, emission='#FFF3DC', strength=60.0)
+    show = lib.mat('lamp_show', '#FFF3DC', rough=0.3, tex=None, emission='#FFF3DC', strength=60.0)
     h = 58.0
     parts = [lib.cyl('pole', 0.9, h, (base[0], base[1], h / 2), 6, steel, r2=0.6)]
     yaw = math.atan2(target[1] - base[1], target[0] - base[0])
@@ -127,7 +129,7 @@ def build_tower(name, base, target):
     for r in range(3):
         for c in range(6):
             off = right * (-6.25 + c * 2.5) + Vector((0, 0, -2.2 + r * 2.2))
-            lp = lib.box('lamp', (0.4, 2.0, 1.7), head + fwd * 1.15 + off, lamp, rot=(0, math.radians(-20), yaw))
+            lp = lib.box('lamp', (0.4, 2.0, 1.7), head + fwd * 1.15 + off, show if c % 2 else lamp, rot=(0, math.radians(-20), yaw))
             lamps.append(lp)
     for p in parts + lamps:
         lib.apply(p)
@@ -148,8 +150,8 @@ def build_beam(name, src, target, beam_mat, radius=16.0):
 
 
 def build_scoreboard():
+    """North end board (behind the Texas end zone)."""
     steel = lib.mat('steel', '#4A4C50', rough=0.6, metal=0.4, tex='grime')
-    screen = lib.mat('screen', '#101418', rough=0.4, tex=None, emission='#3A2A1A', strength=2.0)
     y = AY + 46
     parts = [lib.box('board_frame', (34, 2.0, 15), (0, y, 44), steel)]
     for x in (-12, 12):
@@ -157,9 +159,61 @@ def build_scoreboard():
     for p in parts:
         lib.apply(p)
         lib.box_uv(p, 2.0)
-    board = lib.join(parts, 'scoreboard')
-    scr = lib.quad('screen', (0, y - 1.05, 44), (1, 0, 0), (0, 0, 1), 32, 13, screen)
+    board = lib.join(parts, 'scoreboard_north')
+    scr = lib.quad('screen_north', (0, y - 1.05, 44), (1, 0, 0), (0, 0, 1), 32, 13,
+                   lib.screen_mat('screen_north', lib.load_tex('jumbo_idle.png'), 2.0))
     return board, scr
+
+
+JUMBO_Y, JUMBO_Z, JUMBO_W = -(AY + 44), 46.0, 48.0
+
+
+def build_jumbotron():
+    """Video board above the south (OU) end zone, facing the QB. `screen` has 0..1 UVs for a render-target texture
+    (live broadcast cam / replays / MAKE SOME NOISE); `screen_ribbon` under it carries the score or pulse text."""
+    steel = lib.mat('steel', '#4A4C50', rough=0.6, metal=0.4, tex='grime')
+    H = JUMBO_W * 9 / 16
+    y = JUMBO_Y
+    parts = [lib.box('jumbo_frame', (JUMBO_W + 3, 2.6, H + 8), (0, y, JUMBO_Z - 1.5), steel),
+             lib.box('jumbo_crown', (JUMBO_W * 0.55, 2.4, 3.2), (0, y, JUMBO_Z + H / 2 + 4.0), steel)]
+    for x in (-16, 16):
+        parts.append(lib.box('jumbo_leg', (2.0, 2.0, JUMBO_Z), (x, y - 1.0, JUMBO_Z / 2 - 2), steel))
+    for p in parts:
+        lib.apply(p)
+        lib.box_uv(p, 2.0)
+    board = lib.join(parts, 'jumbotron')
+    scr = lib.quad('screen', (0, y + 1.32, JUMBO_Z), (-1, 0, 0), (0, 0, 1), JUMBO_W, H,
+                   lib.screen_mat('screen', lib.load_tex('jumbo_idle.png'), 5.0))
+    rib = lib.quad('screen_ribbon', (0, y + 1.32, JUMBO_Z - H / 2 - 2.4), (-1, 0, 0), (0, 0, 1), JUMBO_W, 3.0,
+                   lib.screen_mat('ribbon_jumbo', lib.load_tex('ribbon_calm.png'), 4.0))
+    return board, scr, rib
+
+
+def build_ribbon(pts, nrm, d=30.96, z0=17.5, z1=19.5, tile=32.0):
+    """LED ribbon on the upper-deck fascia, all the way around the bowl. u repeats every `tile` m."""
+    bm = bmesh.new()
+    uvl = bm.loops.layers.uv.new('UVMap')
+    ring = [pts[i] + nrm[i] * d for i in range(SAMPLES)]
+    u = 0.0
+    for i in range(SAMPLES):
+        a, b = ring[i], ring[(i + 1) % SAMPLES]
+        L = (b - a).length
+        vs = [bm.verts.new(a + Vector((0, 0, z0))), bm.verts.new(b + Vector((0, 0, z0))),
+              bm.verts.new(b + Vector((0, 0, z1))), bm.verts.new(a + Vector((0, 0, z1)))]
+        f = bm.faces.new(vs)
+        for loop, uv in zip(f.loops, [(-u, 0), (-u - L / tile, 0), (-u - L / tile, 1), (-u, 1)]):
+            loop[uvl].uv = uv
+        u += L / tile
+    m = lib.screen_mat('ribbon', lib.load_tex('ribbon_calm.png'), 3.0)
+    for n in m.node_tree.nodes:
+        if n.type == 'TEX_IMAGE':
+            n.extension = 'REPEAT'
+    ob = lib.new_obj('ribbon', bm, m)
+    for poly in ob.data.polygons:
+        c = poly.center
+        if poly.normal.dot(Vector((c.x, c.y, 0))) > 0:
+            poly.flip()
+    return ob
 
 
 def build_pressbox():
@@ -187,7 +241,7 @@ def build(beams=True):
         lights.append((head, tgt))
         if beams:
             objs.append(build_beam(f'beam_{i}', head, tgt, beam_mat))
-    objs += list(build_scoreboard()) + list(build_pressbox())
+    objs += list(build_scoreboard()) + list(build_jumbotron()) + list(build_pressbox()) + [build_ribbon(pts, nrm)]
     seat_data = crowd_seats(pts, nrm, seats)
     return objs, lights, seat_data
 

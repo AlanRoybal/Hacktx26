@@ -418,3 +418,25 @@ def sweep(name, pts, radii, segs=8, material=None, side=(0, 1, 0), tip=True):
     bm.faces.new(rings[-1])
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     return smooth(new_obj(name, bm, material))
+
+
+def screen_mat(name, img, strength=4.0):
+    """Emissive display (jumbotron, ribbon boards). Exports as emissiveTexture + KHR_materials_emissive_strength."""
+    m = bpy.data.materials.get(name) or bpy.data.materials.new(name)
+    m.use_nodes = True
+    nt = m.node_tree
+    bsdf = nt.nodes['Principled BSDF']
+    bsdf.inputs['Base Color'].default_value = (0.01, 0.01, 0.01, 1)
+    bsdf.inputs['Roughness'].default_value = 0.35
+    ti = next((n for n in nt.nodes if n.type == 'TEX_IMAGE'), None) or nt.nodes.new('ShaderNodeTexImage')
+    ti.image = img
+    ti.interpolation = 'Closest'
+    nt.links.new(ti.outputs['Color'], bsdf.inputs['Emission Color'])
+    bsdf.inputs['Emission Strength'].default_value = strength
+    return m
+
+
+def load_tex(fname):
+    img = bpy.data.images.load(os.path.join(TEXTURES, fname), check_existing=True)
+    img.pack()
+    return img
