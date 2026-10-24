@@ -2,3 +2,4 @@ node_modules
 dist
 assets/blender/__pycache__
 tools/imu-traces/*.json
+*.blend1
