@@ -41,7 +41,7 @@ export class Actor {
   role = '';
   data: Record<string, any> = {};
 
-  constructor(public team: Team, public number: number) {
+  constructor(public team: Team, public number: number, public name = '') {
     this.obj = SkeletonUtils.clone(gltf.scene);
     this.obj.traverse(o => {
       const m = o as THREE.SkinnedMesh;
@@ -50,6 +50,19 @@ export class Actor {
       m.frustumCulled = false;
       const swap = (mat: THREE.Material) => {
         let out = teamMats[team].get(mat.name) ?? mat;
+        if (mat.name === 'name_plate') {
+          const nm = (out as THREE.MeshStandardMaterial).clone();
+          const cv = document.createElement('canvas');
+          cv.width = 512; cv.height = 96;
+          const c = cv.getContext('2d')!;
+          c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle';
+          c.font = '900 78px Impact, "Arial Black", sans-serif';
+          c.fillText(name, 256, 52, 500);
+          const tex = new THREE.CanvasTexture(cv);
+          tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+          nm.map = tex;
+          out = nm;
+        }
         if (mat.name === 'numbers') {
           const nm = (out as THREE.MeshStandardMaterial).clone();
           const tex = nm.map!.clone();

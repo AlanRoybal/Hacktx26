@@ -17,8 +17,14 @@ export const OFF_SPOT: Record<OffPos, [number, number]> = {
   LT: [2.9, -0.8], LG: [1.45, -0.8], C: [0, -0.7], RG: [-1.45, -0.8], RT: [-2.9, -0.8],
   TE: [4.4, -1.0], WR1: [-21, -0.9], WR2: [20, -0.9], WR3: [-12, -1.2], RB: [-1.6, -5.2],
 };
-export const OFF_NUM: Record<OffPos, number> = { LT: 72, LG: 65, C: 55, RG: 70, RT: 78, TE: 86, WR1: 1, WR2: 11, WR3: 4, RB: 7 };
-export const DEF_NUM: Record<DefPos, number> = { DE1: 90, DT1: 95, DT2: 9, DE2: 44, LB1: 23, LB2: 10, CB1: 2, CB2: 7, NB: 13, S1: 8, S2: 21 };
+// 2026 rosters (texaslonghorns.com, soonersports.com). Starters picked by position, not an official depth chart.
+export const OFF_NUM: Record<OffPos, number> = { LT: 74, LG: 54, C: 62, RG: 73, RT: 75, TE: 15, WR1: 1, WR2: 8, WR3: 3, RB: 0 };
+export const OFF_NAME: Record<OffPos, string> = { LT: 'GOOSBY', LG: 'HUTSON', C: 'ROBERTSON', RG: 'BAKER', RT: 'CHATMAN',
+  TE: 'MASUNAS', WR1: 'WINGO', WR2: 'COLEMAN', WR3: 'MOSLEY', RB: 'BROWN' };
+export const DEF_NUM: Record<DefPos, number> = { DE1: 44, DT1: 0, DT2: 55, DE2: 34, LB1: 10, LB2: 11, CB1: 4, CB2: 24, NB: 2, S1: 22, S2: 25 };
+export const DEF_NAME: Record<DefPos, string> = { DE1: 'WEIN', DT1: 'STONE', DT2: 'SAILI', DE2: 'ADEBAWORE', LB1: 'LEWIS', LB2: 'MOORE',
+  CB1: 'GUILLORY', CB2: 'JOHNSON', NB: 'ROBINSON', S1: 'BOWEN', S2: 'BOGANOWSKI' };
+export const QB_NAME = 'MANNING';
 export const DEF_SPOT: Record<DefPos, [number, number]> = {
   DE1: [-3.8, 1.0], DT1: [-1.0, 0.9], DT2: [1.0, 0.9], DE2: [3.8, 1.0], LB1: [-2.6, 5], LB2: [2.6, 5],
   CB1: [-21, 6], CB2: [20, 6], NB: [-12, 5], S1: [-9, 13], S2: [9, 13],

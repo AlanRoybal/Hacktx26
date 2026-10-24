@@ -42,6 +42,7 @@ def materials(c, sfx=''):
     M['tape'] = lib.mat('tape', '#E6E2D8', tex='grime')
     M['sole'] = lib.mat('sole', '#0E0E0E', tex=None)
     M['numbers'] = lib.mat('numbers' + sfx, c['numbers'], image=team_image('numbers_atlas.png'), alpha_clip=True)
+    M['name_plate'] = lib.mat('name_plate' + sfx, c['numbers'], image=team_image('numbers_atlas.png'), alpha_clip=True)
     M['helmet_logo'] = lib.mat('helmet_logo' + sfx, '#FFFFFF', image=team_image(f"logo_{c['logo']}_hd.png"), alpha_clip=True)
     return M
 
@@ -86,12 +87,14 @@ def limb_w(ob, bone, parent=None, child=None, t0=0.15, t1=0.85):
     return ob
 
 
-def decal(name, zc, w, h, number, back, material):
+def decal(name, zc, w, h, number, back, material, box=None, out=0.006):
     """Number decal that follows the torso ellipse. UVs pick the number's cell in the 10x10 atlas."""
     bm = bmesh.new()
     uvl = bm.loops.layers.uv.new('UVMap')
     col, row = number % 10, number // 10
     u0, u1, v0, v1 = col / 10, (col + 1) / 10, 1 - (row + 1) / 10, 1 - row / 10
+    if box:
+        u0, u1, v0, v1 = box
     cols, rows = 6, 2
     grid = []
     for r in range(rows + 1):
@@ -100,7 +103,7 @@ def decal(name, zc, w, h, number, back, material):
         line = []
         for c in range(cols + 1):
             x = -w / 2 + w * c / cols
-            y = (ry * math.sqrt(max(0.0, 1 - (x / rx) ** 2)) + 0.006) * (1 if back else -1)
+            y = (ry * math.sqrt(max(0.0, 1 - (x / rx) ** 2)) + out) * (1 if back else -1)
             line.append((bm.verts.new((-x if back else x, y, z)), (c / cols, r / rows)))
         grid.append(line)
     for r in range(rows):
@@ -180,6 +183,8 @@ def build_body(M, number, sfx=''):
     add(lib.smooth(hdm), bone='head')
     add(decal('num_front', 1.33, 0.2, 0.19, number, False, M['numbers']), bone='chest', uv=0)
     add(decal('num_back', 1.31, 0.24, 0.23, number, True, M['numbers']), bone='chest', uv=0)
+    # nameplate above the back number; game code draws the surname into this material per player
+    add(decal('num_name', 1.45, 0.3, 0.06, number, True, M['name_plate'], box=(0, 1, 0, 1), out=0.03), bone='chest', uv=0)
     return parts
 
 

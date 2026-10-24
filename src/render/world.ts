@@ -80,6 +80,8 @@ export class World {
   private towerLights: THREE.SpotLight[] = [];
   crowd: CrowdPart[] = [];
   crowdUniforms = { uTime: { value: 0 }, uHypeTex: { value: 0 }, uHypeOU: { value: 0 }, uWave: { value: -10 } };
+  mosaicU = { value: 0 };
+  mosaicTarget = 0;
   props!: GLTF;
   football!: THREE.Object3D;
   fpArm!: THREE.Group;
@@ -204,15 +206,17 @@ export class World {
    * driven by the team's pulse uniform, a per-fan threshold, a jump and a wave front. */
   private buildCrowd(seats: number[][]) {
     const rnd = mulberry(7);
-    const signIdx: number[] = [], fanIdx: number[] = [];
-    seats.forEach((_, i) => (rnd() < 0.12 ? signIdx : fanIdx).push(i));
+    const signIdx: number[] = [], fanIdx: number[] = [], jerseyIdx: number[] = [], cowboyIdx: number[] = [];
+    seats.forEach((_, i) => { const r = rnd(); (r < 0.12 ? signIdx : r < 0.27 ? jerseyIdx : r < 0.37 ? cowboyIdx : fanIdx).push(i); });
+    const HATS = ['#C8A672', '#1A1A1A', '#EDE6D6', '#6B4A2B', '#D9C08F'].map(c => new THREE.Color(c));
+    const JERSEY_NUMS = [[16, 16, 1, 8, 0, 3], [10, 10, 1, 4, 8, 2]];
     const teamCol = [new THREE.Color('#BF5700'), new THREE.Color('#841617')];
     const shirtCol = (team: number) => { const r = rnd(); return r < 0.72 ? teamCol[team] : r < 0.9 ? new THREE.Color('#E8E4DA') : new THREE.Color('#1A1A1A'); };
     const build = (name: string, idx: number[]) => {
       const tmpl = this.props.scene.getObjectByName(name)!;
       const meshes: THREE.Mesh[] = [];
       tmpl.traverse(o => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh); });
-      const mats: THREE.Matrix4[] = [], phase = new Float32Array(idx.length * 4), shirts: THREE.Color[] = [];
+      const mats: THREE.Matrix4[] = [], phase = new Float32Array(idx.length * 4), shirts: THREE.Color[] = [], hats: THREE.Color[] = [];
       const cell = new Float32Array(idx.length * 2);
       idx.forEach((si, k) => {
         const [x, y, z, yaw, team] = seats[si];
@@ -220,8 +224,15 @@ export class World {
         mats.push(new THREE.Matrix4().compose(new THREE.Vector3(x, z, -y), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw),
           new THREE.Vector3(s, s, s)));
         phase.set([rnd() * 6.28, rnd() * 0.6, team, Math.atan2(-y, x)], k * 4);
-        cell.set([0.25 * Math.floor(rnd() * 4), -0.5 * team], k * 2);
-        shirts.push(shirtCol(team));
+        if (name === 'crowd_jersey') {
+          const n = JERSEY_NUMS[team][Math.floor(rnd() * 6)];
+          cell.set([(n % 10 - 6) / 10, (Math.floor(n / 10) - 1) / 10], k * 2);
+          shirts.push(teamCol[team]);
+        } else {
+          cell.set([0.25 * Math.floor(rnd() * 4), -0.5 * team], k * 2);
+          shirts.push(shirtCol(team));
+        }
+        hats.push(HATS[Math.floor(rnd() * HATS.length)]);
       });
       for (const m of meshes) {
         const g = m.geometry.clone();
@@ -253,7 +264,13 @@ export class World {
         };
         mat.customProgramCacheKey = () => 'crowd' + (isSign ? 's' : '');
         const im = new THREE.InstancedMesh(g, mat, idx.length);
-        mats.forEach((M, k) => { im.setMatrixAt(k, M); if (!isSign && !isSkin) im.setColorAt(k, shirts[k]); });
+        const white = new THREE.Color('#F2EEE6');
+        mats.forEach((M, k) => {
+          im.setMatrixAt(k, M);
+          if (src.name === 'crowd_hat') im.setColorAt(k, hats[k]);
+          else if (src.name === 'crowd_number' || src.name === 'crowd_stripe') im.setColorAt(k, white);
+          else if (!isSign && !isSkin) im.setColorAt(k, shirts[k]);
+        });
         if (isSkin) idx.forEach((_, k) => im.setColorAt(k, new THREE.Color(['#8A5A3C', '#C08A64', '#5E3B26', '#D9A784'][k % 4]).multiplyScalar(2.2)));
         im.frustumCulled = false;
         this.scene.add(im);
@@ -262,6 +279,49 @@ export class World {
     };
     build('crowd_unit', fanIdx);
     build('crowd_sign', signIdx);
+    build('crowd_jersey', jerseyIdx);
+    build('crowd_cowboy', cowboyIdx);
+    this.buildMosaic(seats);
+  }
+
+  /** Card stunt: the lower end-zone section under the jumbotron holds up cards that form the Freetail Hackers logo. */
+  private buildMosaic(seats: number[][]) {
+    const pts = seats.map(([x, y, z, yaw]) => ({ x, h: z, z: -y, yaw })).filter(p => p.z > 55 && Math.abs(p.x) < 21);
+    if (!pts.length) return;
+    const h0 = Math.min(...pts.map(p => p.h)), band = 10;
+    const sel = pts.filter(p => p.h < h0 + band);
+    const img = new Image();
+    img.src = 'textures/freetail_logo.png';
+    img.onload = () => {
+      const W = 48, H = 24, cv = document.createElement('canvas');
+      cv.width = W; cv.height = H;
+      const c = cv.getContext('2d')!;
+      const pad = 0.12, aw = W * (1 - 2 * pad), ah = aw * img.height / img.width;
+      for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) c.drawImage(img, W * pad + dx, (H - ah) / 2 + dy, aw, ah);   // thicken thin strokes
+      const px = c.getImageData(0, 0, W, H).data;
+      const g = new THREE.PlaneGeometry(0.9, 0.75);
+      const delay = new Float32Array(sel.length);
+      const mat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+      mat.onBeforeCompile = sh => {
+        sh.uniforms.uMosaic = this.mosaicU;
+        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aDelay; uniform float uMosaic;')
+          .replace('#include <begin_vertex>', '#include <begin_vertex>\nfloat mk = clamp(uMosaic * 1.8 - aDelay, 0., 1.); transformed.y *= mk; transformed.x *= min(1., mk * 3.);');
+      };
+      const im = new THREE.InstancedMesh(g, mat, sel.length);
+      const orange = new THREE.Color('#BF5700').multiplyScalar(0.8), white = new THREE.Color('#F4EFE6').multiplyScalar(0.85);
+      sel.forEach((p, k) => {
+        const u = (p.x + 21) / 42, v = 1 - (p.h - h0) / band;
+        const i = (Math.min(H - 1, Math.floor(v * H)) * W + Math.min(W - 1, Math.floor((1 - u) * W))) * 4;
+        const fwd = new THREE.Vector3(Math.sin(p.yaw), 0, Math.cos(p.yaw));
+        const pos = new THREE.Vector3(p.x, p.h + 1.2, p.z).addScaledVector(fwd, 0.3);
+        im.setMatrixAt(k, new THREE.Matrix4().compose(pos, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), p.yaw), new THREE.Vector3(1, 1, 1)));
+        im.setColorAt(k, px[i + 3] > 110 ? white : orange);
+        delay[k] = (1 - v) * 0.6 + Math.random() * 0.15;
+      });
+      g.setAttribute('aDelay', new THREE.InstancedBufferAttribute(delay, 1));
+      im.frustumCulled = false;
+      this.scene.add(im);
+    };
   }
 
   drawJumbo(lines: string[], bg = '#BF5700', fg = '#FFFFFF') {
@@ -285,6 +345,7 @@ export class World {
   setPulse(tex: number, ou: number, t: number) {
     const u = this.crowdUniforms;
     u.uTime.value = t; u.uHypeTex.value = tex; u.uHypeOU.value = ou;
+    this.mosaicU.value += (this.mosaicTarget - this.mosaicU.value) * 0.035;
     const peak = Math.max(tex, ou);
     const strobe = peak > 0.78 ? (Math.sin(t * 22) > 0 ? 1 : 0.15) : 1;
     const showCol = new THREE.Color(ou > tex ? '#C41E1E' : '#FF5A00');

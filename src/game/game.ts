@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { World, YD, OU_GOAL_Z, mulberry } from '../render/world';
 import { Actor } from '../render/players';
-import { PLAYS, OFF_SPOT, DEF_SPOT, OFF_NUM, DEF_NUM, ELIGIBLE, type Play, type OffPos, type DefPos } from './plays';
+import { PLAYS, OFF_SPOT, DEF_SPOT, OFF_NUM, DEF_NUM, OFF_NAME, DEF_NAME, ELIGIBLE, type Play, type OffPos, type DefPos } from './plays';
 import type { ThrowEvent } from '../input/types';
 import type { Audio, Clip } from '../audio';
 
@@ -63,8 +63,8 @@ export class Game {
   private jumboCamTarget = v3();
 
   constructor(public w: World, public audio: Audio, public h: Hooks) {
-    OFF.forEach(p => { const a = new Actor('tex', OFF_NUM[p]); a.role = p; this.off.set(p, a); w.scene.add(a.obj); });
-    DEF.forEach(p => { const a = new Actor('ou', DEF_NUM[p]); a.role = p; this.def.set(p, a); w.scene.add(a.obj); });
+    OFF.forEach(p => { const a = new Actor('tex', OFF_NUM[p], OFF_NAME[p]); a.role = p; this.off.set(p, a); w.scene.add(a.obj); });
+    DEF.forEach(p => { const a = new Actor('ou', DEF_NUM[p], DEF_NAME[p]); a.role = p; this.def.set(p, a); w.scene.add(a.obj); });
     this.toTitle();
   }
 
@@ -77,6 +77,7 @@ export class Game {
     this.resetDrive();
     this.setupPlay();
     this.h.screen('title', this);
+    this.w.mosaicTarget = 1;
     this.audio.playMusic('march_grandioso');
   }
 
@@ -101,6 +102,7 @@ export class Game {
     this.h.plays(this.playIdx, true);
     this.h.hud(this);
     this.audio.duck(true);
+    this.w.mosaicTarget = this.rng() < (this.down >= 3 || this.clock < 30 ? 0.5 : 0.15) ? 1 : 0;
     const ord = ['', '1ST', '2ND', '3RD', '4TH'][this.down];
     const lines = this.clock < 30 ? ['FINAL SECONDS', 'GET LOUD'] : this.down === 4 ? ['4TH DOWN', 'MAKE SOME NOISE']
       : this.toGo < 3 && this.down > 1 ? [`${ord} & ${this.toGo}`, 'MAKE SOME NOISE'] : this.down === 3 ? ['3RD DOWN', 'MAKE SOME NOISE'] : null;
@@ -171,6 +173,7 @@ export class Game {
   snap() {
     this.state = 'SNAP'; this.t = 0; this.playT = 0;
     this.h.plays(this.playIdx, false);
+    this.w.mosaicTarget = 0;
     this.audio.play('cadence', 0.9);
     this.audio.duck(false);
     this.w.jumboLive();
@@ -621,7 +624,7 @@ export class Game {
     this.audio.playMusic('boomer_sooner', false);
     this.spikeOU = 1;
     this.w.drawJumbo(['INTERCEPTED'], '#841617', '#FDF9D8');
-    this.h.banner('INTERCEPTED', `#${d.number} ${d.role}`, '#841617');
+    this.h.banner('INTERCEPTED', `#${d.number} ${d.name}`, '#841617');
     this.h.buzz(300, 1);
   }
 
@@ -666,7 +669,7 @@ export class Game {
       this.result = { kind: 'catch', yards, time: this.playT + (oob ? 0 : 6), oob };
       this.stats.yds += yards;
       const first = yards >= this.toGo;
-      this.h.banner(first ? 'FIRST DOWN' : `+${yards} YARDS`, `${c.role} #${c.number}`, '#BF5700');
+      this.h.banner(first ? 'FIRST DOWN' : `+${yards} YARDS`, `#${c.number} ${c.name}`, '#BF5700');
       if (first) { this.audio.play('horn', 0.7); this.w.drawJumbo(['FIRST', 'DOWN']); this.jumboUntil = this.t + 3.5; this.spikeTex = Math.max(this.spikeTex, 0.7); }
       this.toDead();
     }
@@ -706,6 +709,7 @@ export class Game {
     cam.up.set(0, 1, 0);
     if (this.t > 2.2) this.w.jumboMode = 'live';   // jumbotron shows the celebration cam
     if (this.t > 2.2 && this.t < 2.3) this.w.jumboLive();
+    if (this.t > 3) this.w.mosaicTarget = 1;
     if (this.t > 7.5) this.gameOver(true);
   }
 

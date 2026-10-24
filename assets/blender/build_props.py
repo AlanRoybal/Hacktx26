@@ -71,7 +71,7 @@ SIGN_HYPE = dict(arms=[[(0.19, 0, 0.66), (0.25, -0.08, 0.95), (0.22, -0.12, 1.24
                  board=(0, -0.15, 1.42))
 
 
-def fan(name, arms, lift=0.0, board=None):
+def fan(name, arms, lift=0.0, board=None, attire=None):
     shirt = lib.mat('crowd_shirt', '#FFFFFF', tex='grime')
     skin = lib.mat('crowd_skin', '#A06E4C', rough=0.8, tex=None)
     z = lambda p: (p[0], p[1], p[2] + lift)
@@ -81,8 +81,24 @@ def fan(name, arms, lift=0.0, board=None):
     parts.append(hd)
     for pts in arms:
         parts.append(lib.tube('arm', [z(q) for q in pts], 0.045, 4, shirt))
+    if attire == 'cowboy':   # straw/felt hat: brim + crown
+        hat = lib.mat('crowd_hat', '#FFFFFF', rough=0.8, tex='grime')
+        parts.append(lib.cyl('brim', 0.2, 0.018, z((0, -0.01, 0.955)), 12, hat))
+        parts.append(lib.cyl('crown', 0.085, 0.13, z((0, -0.01, 1.02)), 10, hat, r2=0.075))
+    if attire == 'jersey':   # number on the chest, atlas cell picked per fan in code
+        nm = lib.mat('crowd_number', '#FFFFFF', rough=0.8, image=lib.load_tex('numbers_atlas.png'), alpha_clip=True)
+        q = lib.quad('jnum', z((0, -0.128, 0.5)), (-1, 0, 0), (0, 0, 1), 0.2, 0.2, nm)
+        uvl = q.data.uv_layers['UVMap']
+        for l in q.data.loops:   # cell of #16 in the 10x10 atlas (col 6, row 1)
+            uv = uvl.data[l.index].uv
+            uv[0], uv[1] = (6 + uv[0]) / 10, 1 - (2 - uv[1]) / 10
+        stripe = lib.mat('crowd_stripe', '#FFFFFF', rough=0.85, tex=None)
+        for x in (1, -1):
+            parts.append(lib.box('stripe', (0.03, 0.27, 0.05), z((0.205 * x, 0, 0.62)), stripe))
     ob = finish(parts, name, 0.5)
     lib.smooth(ob)
+    if attire == 'jersey':
+        ob = lib.join([ob, q], name)
     if board:
         sm = lib.mat('crowd_sign', '#FFFFFF', rough=0.7, image=lib.load_tex('crowd_signs.png'))
         back = lib.mat('crowd_sign_back', '#B8A27A', tex='grime')
@@ -109,6 +125,12 @@ def with_hype(base, hype):
 def crowd_unit(name, loc=(0, 0, 0)):
     """~90 tri fan facing -Y. Basis = standing/clapping, 'hype' = jumping with arms up. Code tints per instance."""
     ob = with_hype(fan(name, CALM_ARMS), fan(name + '_h', HYPE_ARMS, lift=0.12))
+    ob.location = loc
+    return ob
+
+
+def crowd_variant(name, attire, loc=(0, 0, 0)):
+    ob = with_hype(fan(name, CALM_ARMS, attire=attire), fan(name + '_h', HYPE_ARMS, lift=0.12, attire=attire))
     ob.location = loc
     return ob
 
@@ -147,7 +169,8 @@ def build(offset=True):
     objs += [pylon(f'pylon_{i}', (sp * 4 + i * 0.3, 0, 0)) for i in range(8)]
     objs += [chain_set('chains', (sp * 5, 0, 0)), down_marker('down_marker', (sp * 5.5, 0, 0)),
              bench('bench_texas', (sp * 6, 0, 0), '#BF5700'), bench('bench_ou', (sp * 7, 0, 0), '#841617'),
-             crowd_unit('crowd_unit', (sp * 8, 0, 0)), crowd_sign('crowd_sign', (sp * 8.5, 0, 0))]
+             crowd_unit('crowd_unit', (sp * 8, 0, 0)), crowd_sign('crowd_sign', (sp * 8.5, 0, 0)),
+             crowd_variant('crowd_jersey', 'jersey', (sp * 9, 0, 0)), crowd_variant('crowd_cowboy', 'cowboy', (sp * 9.5, 0, 0))]
     c, m = cannon('smokey', (sp * 9, 0, 0))
     return objs + [c, m]
 
