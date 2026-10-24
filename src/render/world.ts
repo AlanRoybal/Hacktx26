@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Beams } from './beams';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 export const YD = 0.9144;
@@ -77,7 +78,7 @@ export class World {
   private ribbonTex = { calm: loadTex('ribbon_calm.png', true), hype: loadTex('ribbon_hype.png', true) };
   private lampShow: THREE.MeshStandardMaterial[] = [];
   private lamp: THREE.MeshStandardMaterial[] = [];
-  private beams: THREE.MeshBasicMaterial[] = [];
+  private beamFx = new Beams();
   private showLights: THREE.SpotLight[] = [];
   private towerLights: THREE.SpotLight[] = [];
   crowd: CrowdPart[] = [];
@@ -138,9 +139,7 @@ export class World {
         for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i));
       }
       if (name === 'beam') {
-        const b = new THREE.MeshBasicMaterial({ color: '#FFF1D6', transparent: true, opacity: 0.05, blending: THREE.AdditiveBlending,
-          depthWrite: false, side: THREE.DoubleSide, fog: false });
-        m.material = b; this.beams.push(b); m.renderOrder = 5;
+        m.visible = false;   // replaced by Beams shafts
       } else if (name === 'screen' || name === 'screen_north') {
         const s = new THREE.MeshBasicMaterial({ map: name === 'screen' ? this.jumboRT.texture : loadTex('jumbo_idle.png'), fog: false, toneMapped: false });
         if (name === 'screen') this.screenMat = s;
@@ -192,6 +191,8 @@ export class World {
     this.scene.add(new THREE.HemisphereLight('#1c2740', '#0b0d08', 0.35));
     const SHOW = [[-30, -92, 14], [25, -94, 14], [-60, -30, 12], [60, -35, 12], [-58, 30, 12], [58, 40, 12], [-20, 95, 14], [30, 92, 14]]
       .map(([x, y, z]) => new THREE.Vector3(x, z, -y));
+    this.scene.add(this.beamFx.group);
+    let glow: THREE.Texture | undefined;
     for (let i = 0; i < 4; i++) {
       const lamps = stadium.getObjectByName(`tower_${i}_lamps`)!;
       const head = new THREE.Box3().setFromObject(lamps).getCenter(new THREE.Vector3());
@@ -201,6 +202,7 @@ export class World {
       if (i === 0) { L.castShadow = true; L.shadow.mapSize.set(1024, 1024); L.shadow.camera.near = 40; L.shadow.camera.far = 200; L.shadow.bias = -0.0005; }
       this.scene.add(L, L.target);
       this.towerLights.push(L);
+      glow = this.beamFx.addTower(head, L.target.position, glow);
       for (const tg of [...SHOW].sort((a, b) => a.distanceTo(head) - b.distanceTo(head)).slice(0, 2)) {
         const S = new THREE.SpotLight('#FF6A14', 0, 200, THREE.MathUtils.degToRad(14), 0.35, 1.2);
         S.position.copy(head);
@@ -208,6 +210,7 @@ export class World {
         S.userData.base = tg.clone();
         this.scene.add(S, S.target);
         this.showLights.push(S);
+        this.beamFx.addSpot();
       }
     }
   }
@@ -363,8 +366,8 @@ export class World {
     const showCol = new THREE.Color(ou > tex ? '#C41E1E' : '#FF5A00');
     for (const m of this.lampShow) { m.emissive.copy(peak > 0.55 ? showCol : new THREE.Color('#FFF3DC')); m.emissiveIntensity = peak > 0.55 ? 8 * strobe : 6; }
     for (const m of this.lamp) m.emissiveIntensity = 6 + 6 * peak;
-    for (const b of this.beams) b.opacity = 0.035 + 0.05 * peak * strobe;
     for (const L of this.towerLights) L.intensity = 9000 * (1 + 0.35 * peak);
+    this.beamFx.update(t, peak, strobe, showCol, this.showLights);
     this.showLights.forEach((S, i) => {
       S.color.copy(showCol);
       S.intensity = peak > 0.55 ? 60000 * (peak - 0.4) * strobe : 0;
