@@ -184,7 +184,7 @@ def build_body(M, number, sfx=''):
     add(decal('num_front', 1.33, 0.2, 0.19, number, False, M['numbers']), bone='chest', uv=0)
     add(decal('num_back', 1.31, 0.24, 0.23, number, True, M['numbers']), bone='chest', uv=0)
     # nameplate above the back number; game code draws the surname into this material per player
-    add(decal('num_name', 1.45, 0.3, 0.06, number, True, M['name_plate'], box=(0, 1, 0, 1), out=0.03), bone='chest', uv=0)
+    add(decal('num_name', 1.445, 0.3, 0.06, number, True, M['name_plate'], box=(0, 1, 0, 1), out=0.075), bone='chest', uv=0)
     return parts
 
 
