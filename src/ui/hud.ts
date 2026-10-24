@@ -29,7 +29,8 @@ export function makeHud(buzz: (ms: number, amp?: number) => void): Hooks {
     },
     hud(g: Game) {
       $('sTex').textContent = String(g.tex); $('sOu').textContent = String(g.ou);
-      const c = Math.max(0, Math.ceil(g.clock));
+      const live = ['SNAP', 'POCKET', 'AIR', 'RUN', 'SACK'].includes(g.state);
+      const c = Math.max(0, Math.ceil(g.clock - (live ? g.playT : 0)));
       $('sClock').textContent = `${Math.floor(c / 60)}:${String(c % 60).padStart(2, '0')}`;
       $('sDown').textContent = `${ORD[Math.min(4, g.down)]} & ${g.toGo >= g.ballOn ? 'GOAL' : g.toGo}`;
       $('sSpot').textContent = g.ballOn > 50 ? `TEX ${100 - g.ballOn}` : `OU ${g.ballOn}`;

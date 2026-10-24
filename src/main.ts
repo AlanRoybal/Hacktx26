@@ -16,6 +16,7 @@ const audio = new Audio();
 let game: Game;
 let mode: 'mouse' | 'joycon' = 'mouse';
 let debug = false;
+const keys = new Set<string>();
 
 const listener: InputListener = {
   onTrigger(down) {
@@ -71,6 +72,14 @@ function frame(now: number) {
     game.aimYaw = -mouse.aimX * 0.3;
     game.handQ.setFromEuler(new THREE.Euler(mouse.aimY * 0.3, -mouse.aimX * 0.4, 0));
   }
+  // pocket movement: off-hand Joy-Con stick if held, else the throwing Joy-Con's stick, else arrow keys
+  let st = [(keys.has('ArrowRight') ? 1 : 0) - (keys.has('ArrowLeft') ? 1 : 0), (keys.has('ArrowUp') ? 1 : 0) - (keys.has('ArrowDown') ? 1 : 0)];
+  if (joy.connected() && joy.active) {
+    const off = [...joy.pads.values()].find(p => p !== joy.active && now - p.lastReport < 300);
+    const js = (off ?? joy.active).stick.map(v => (Math.abs(v) < 0.18 ? 0 : THREE.MathUtils.clamp(v, -1, 1)));
+    if (Math.hypot(js[0], js[1]) > Math.hypot(st[0], st[1])) st = js;
+  }
+  game.stick = st;
   while (acc >= STEP) { game.step(STEP); acc -= STEP; }
   world.render(now / 1000);
   frames++;
@@ -83,7 +92,7 @@ function updateUi() {
   const s = game.state;
   const trig = mode === 'joycon' ? (joy.active?.isLeft ? 'ZL' : 'ZR') : 'CLICK';
   setHint(s === 'PRESNAP' ? `HOLD ${trig} TO HIKE  ·  ${mode === 'joycon' ? 'STICK' : '1-4'} TO CHANGE PLAY`
-    : s === 'POCKET' ? `${mode === 'joycon' ? 'THROW AND RELEASE ' + trig : 'AIM, FLICK UP AND RELEASE'}` : '');
+    : s === 'POCKET' ? `${mode === 'joycon' ? 'STICK TO MOVE  ·  THROW, RELEASE ' + trig + ' AT THE TOP' : 'ARROWS TO MOVE  ·  AIM, FLICK UP, RELEASE'}` : '');
   setPill(joy.connected(), joy.connected() ? `JOY-CON (${joy.active?.isLeft ? 'L' : 'R'}) ${joy.active?.battery ?? ''}` : 'MOUSE  ·  ENTER = CONNECT JOY-CON');
   setCross(innerWidth * (mouse.aimX + 1) / 2, innerHeight * (1 - mouse.aimY) / 2, mode === 'mouse' && s === 'POCKET');
   if (debug) {
@@ -96,6 +105,7 @@ function updateUi() {
 }
 
 addEventListener('keydown', async e => {
+  keys.add(e.key);
   if (!game) return;
   audio.start();
   if (e.key === 'Enter') { await joy.connect(true); if (joy.pads.size) mode = 'joycon'; }
@@ -114,6 +124,7 @@ addEventListener('keydown', async e => {
       if (window.rr) window.rr.saveTrace(n, txt); else { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt])); a.download = n; a.click(); } }
   }
 });
-addEventListener('keyup', e => { if (e.key === ' ' && mouse.down) mouse.release(); });
+addEventListener('keyup', e => {
+  keys.delete(e.key); if (e.key === ' ' && mouse.down) mouse.release(); });
 
 boot();

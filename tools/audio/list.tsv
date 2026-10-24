@@ -15,3 +15,8 @@ catch_thud	ytsearch1:football catch sound effect	0	1
 heartbeat	ytsearch1:heartbeat sound effect loop	0	4
 horn	ytsearch1:stadium air horn sound effect	0	3
 cadence	ytsearch1:quarterback cadence blue 42 set hut sound	0	4
+grunt	ytsearch1:football player grunt sound effect	0	1.2
+grunt2	ytsearch1:male pain grunt sound effect	0	1
+helmet_hit	ytsearch1:football helmet collision hit sound effect	0	1.5
+thud	ytsearch1:body falling on ground thud sound effect	0	1
+ear_ring	ytsearch1:ear ringing sound effect after explosion	0	4

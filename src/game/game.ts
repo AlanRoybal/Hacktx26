@@ -3,7 +3,7 @@ import { World, YD, OU_GOAL_Z, mulberry } from '../render/world';
 import { Actor } from '../render/players';
 import { PLAYS, OFF_SPOT, DEF_SPOT, OFF_NUM, DEF_NUM, ELIGIBLE, type Play, type OffPos, type DefPos } from './plays';
 import type { ThrowEvent } from '../input/types';
-import type { Audio } from '../audio';
+import type { Audio, Clip } from '../audio';
 
 export type State = 'TITLE' | 'PRESNAP' | 'SNAP' | 'POCKET' | 'AIR' | 'RUN' | 'SACK' | 'DEAD' | 'CUTSCENE' | 'OVER';
 type Result = { kind: 'catch' | 'inc' | 'int' | 'sack' | 'fumble' | 'td'; yards: number; time: number; oob?: boolean; why?: string };
@@ -53,6 +53,11 @@ export class Game {
   lookAt = v3();
   handQ = new THREE.Quaternion();
   aimYaw = 0;          // camera look-off from the controller (rad)
+  timeScale = 1; tsTarget = 1;   // slow motion
+  stick = [0, 0];                // pocket movement (x = right, y = up/forward)
+  qbOff = new THREE.Vector2();
+  sackFx = { dir: v3(), start: v3(), fwd: v3(), hit: 0 };
+  private hudT = 0;
   rng = mulberry(Date.now() & 0xffff);
   private jumboUntil = 0;
   private jumboCamTarget = v3();
@@ -96,11 +101,17 @@ export class Game {
     this.h.plays(this.playIdx, true);
     this.h.hud(this);
     this.audio.duck(true);
-    if (this.down >= 3) {
-      this.w.drawJumbo([`${['', '1ST', '2ND', '3RD', '4TH'][this.down]} DOWN`, 'MAKE SOME NOISE']);
+    const ord = ['', '1ST', '2ND', '3RD', '4TH'][this.down];
+    const lines = this.clock < 30 ? ['FINAL SECONDS', 'GET LOUD'] : this.down === 4 ? ['4TH DOWN', 'MAKE SOME NOISE']
+      : this.toGo < 3 && this.down > 1 ? [`${ord} & ${this.toGo}`, 'MAKE SOME NOISE'] : this.down === 3 ? ['3RD DOWN', 'MAKE SOME NOISE'] : null;
+    if (lines) {
+      const big = this.clock < 30 || this.down === 4;
+      this.w.drawJumbo(lines);
       this.jumboUntil = 4;
-      this.spikeTex = Math.max(this.spikeTex, 0.35);
-      this.waveT = 0;
+      this.spikeTex = Math.max(this.spikeTex, big ? 0.65 : 0.4);
+      this.spikeOU = Math.max(this.spikeOU, big ? 0.45 : 0.2);
+      if (big) { this.audio.play('horn', 0.6); this.audio.play('crowd_roar', 0.7, 0.95, 'crowd'); this.h.banner(this.clock < 30 ? 'FINAL SECONDS' : `4TH & ${this.toGo}`, 'STADIUM PULSE', '#BF5700'); }
+      if (this.down === 3) this.waveT = 0;
     } else { this.w.jumboLive(); this.jumboUntil = 0; }
   }
 
@@ -140,6 +151,10 @@ export class Game {
     this.w.football.visible = true;
     this.w.fpArm.visible = false;
     this.pressure = 0; this.armSwing = -1; this.aimYaw = 0;
+    this.qbOff.set(0, 0); this.timeScale = this.tsTarget = 1; this.continueBall = false;
+    this.w.post.mat.uniforms.uDaze.value = 0;
+    this.w.camera.fov = 72; this.w.camera.updateProjectionMatrix();
+    this.w.fpArm.rotation.set(0, 0, 0); this.w.fpArm.position.set(0.25, -0.17, -0.7);
     this.lookAt.set(0, 1.5, z + 22);
     this.w.camera.position.copy(this.qb);
     this.w.camera.up.set(0, 1, 0);
@@ -160,6 +175,13 @@ export class Game {
     this.w.jumboLive();
     this.h.buzz(80, 0.6);
     this.stats.lastPlay = this.play.name;
+    const line = new THREE.Vector3(0, 1, this.losZ);
+    setTimeout(() => { this.sfx('hit_pads', line, 0.8); this.sfx('grunt', line, 0.7); this.sfx('grunt2', line.clone().setX(2.5), 0.5); }, 230);
+  }
+
+  private sfx(name: Clip, at: THREE.Vector3, gain = 1, rate = 1) {
+    const d = at.distanceTo(this.w.camera.position);
+    this.audio.play(name, gain * THREE.MathUtils.clamp(10 / Math.max(1, d), 0.15, 1), rate * (0.92 + this.rng() * 0.16));
   }
 
   onPumpFake() {
@@ -181,6 +203,11 @@ export class Game {
       const sol = solve(Math.hypot(dx, dz), -hand.y + 1.3, v);
       v = sol.v; th = sol.th;
     }
+    // release quality: how close the trigger release was to peak arm speed
+    const q = releaseQuality(e.source === 'auto' ? 0 : e.timingMs);
+    yaw += THREE.MathUtils.degToRad((this.rng() - 0.5) * 16 * (1 - q));
+    th += THREE.MathUtils.degToRad((e.timingMs > 0 ? -6 : 6) * (1 - q));
+    const wobble = Math.max(e.wobble, (1 - q) * 0.45);
     // aim assist: receiver whose lead point is nearest the raw throw
     const rawR = rangeOf(v, th, hand.y - 1.3);
     let best: { a: Actor; score: number; p: THREE.Vector3; v: number; th: number; yaw: number } | null = null;
@@ -200,7 +227,7 @@ export class Game {
       if (dYaw < THREE.MathUtils.degToRad(18) && dR < 0.8 && (!best || score < best.score)) best = { a, score, p: lead, v: sol.v, th: sol.th, yaw: ay };
     }
     if (best) {
-      const k = this.assist;
+      const k = this.assist * (0.3 + 0.7 * q);
       yaw = yaw + Math.atan2(Math.sin(best.yaw - yaw), Math.cos(best.yaw - yaw)) * k;
       th = th + (best.th - th) * k;
       v = v + (best.v - v) * k;
@@ -210,18 +237,18 @@ export class Game {
     const b = this.ball;
     b.pos.copy(hand);
     b.vel.set(Math.sin(yaw) * Math.cos(th), Math.sin(th), Math.cos(yaw) * Math.cos(th)).multiplyScalar(v);
-    b.wobble = e.wobble; b.spin = 0; b.live = true; b.throwT = 0; b.bounced = false; b.data = null;
+    b.wobble = wobble; b.spin = 0; b.live = true; b.throwT = 0; b.bounced = false; b.data = null;
     this.w.football.visible = true;
     this.w.fpArm.visible = true;
     this.armSwing = 0;
     this.state = 'AIR'; this.t = 0;
     this.stats.att++;
-    this.stats.bestSpiral = Math.min(this.stats.bestSpiral, e.wobble);
+    this.stats.bestSpiral = Math.min(this.stats.bestSpiral, wobble);
     this.audio.play('whoosh', 0.9, 0.9 + v / 60);
     this.h.buzz(40, 0.5);
-    const grade = e.wobble < 0.08 ? 'A' : e.wobble < 0.16 ? 'B' : e.wobble < 0.3 ? 'C' : 'DUCK';
+    const grade = wobble < 0.08 ? 'A' : wobble < 0.16 ? 'B' : wobble < 0.3 ? 'C' : 'DUCK';
     this.h.statCard([`${Math.round(v * 2.237)} MPH`, `${Math.round(THREE.MathUtils.radToDeg(th))}° LAUNCH`, `SPIRAL ${grade}`,
-      e.source === 'joycon' ? `RELEASE ${Math.abs(Math.round(e.timingMs))} MS ${e.timingMs > 0 ? 'LATE' : 'EARLY'}` : e.source.toUpperCase()]);
+      e.source === 'auto' ? 'AUTO' : releaseText(e.timingMs, q)]);
   }
 
   /** Debug/testing: throw to the most open eligible receiver. */
@@ -277,7 +304,10 @@ export class Game {
     else { a.play('Run', 0.2, Math.max(0.6, s / 6.5)); a.heading = Math.atan2(a.vel.x, a.vel.z); }
   }
 
-  step(dt: number) {
+  step(dtReal: number) {
+    this.timeScale += (this.tsTarget - this.timeScale) * Math.min(1, dtReal * 10);
+    this.tsTarget = 1;
+    const dt = dtReal * this.timeScale;
     this.t += dt;
     const s = this.state;
     if (s === 'TITLE' || s === 'OVER') {
@@ -302,9 +332,15 @@ export class Game {
     if (s === 'DEAD' && this.t > 1.8) this.applyResult();
     if (s === 'CUTSCENE') this.cutscene(dt);
     if (s === 'OVER' && this.t > 1 && this.t - dt <= 1) this.h.screen('over', this);
-    if (s !== 'SACK') this.w.post.mat.uniforms.uFlash.value *= Math.max(0, 1 - dt * 3);
-    this.updatePulse(dt);
+    this.w.post.mat.uniforms.uFlash.value *= Math.max(0, 1 - dtReal * 4);
+    this.updatePulse(dtReal);
     this.updateCamera(dt);
+    const live = ['SNAP', 'POCKET', 'AIR', 'RUN', 'SACK'].includes(s);
+    if (live && (this.hudT += dtReal) > 0.2) { this.hudT = 0; this.h.hud(this); }
+    const cam = this.w.camera;
+    const fov = this.timeScale < 0.7 && (s === 'AIR' || s === 'RUN') ? 46 : 72;
+    if (Math.abs(cam.fov - fov) > 0.05) { cam.fov += (fov - cam.fov) * Math.min(1, dtReal * 5); cam.updateProjectionMatrix(); }
+    if (s !== 'SACK') this.w.post.mat.uniforms.uDaze.value = Math.max(0, this.w.post.mat.uniforms.uDaze.value - dtReal * 0.7);
     this.all.forEach(a => a.update(dt));
     if (this.armSwing >= 0) {
       this.armSwing += dt / 0.28;
@@ -351,8 +387,9 @@ export class Game {
       const a = this.def.get(p)!;
       if (a.data.done) continue;
       if (p === this.rusher && t > this.sackT - 0.8 && this.state === 'POCKET') {
-        this.moveTo(a, this.qb.clone().setY(0), 6.8, dt);
-        a.play('Run', 0.15, 1.2); a.face(this.qb);
+        const qbp = this.w.camera.position.clone().setY(0);
+        this.moveTo(a, qbp, 6.8, dt);
+        a.play('Run', 0.15, 1.2); a.face(qbp);
       } else {
         a.pos.z = Math.max(z - 1.6 - 1.2 * this.pressure, a.pos.z - 0.5 * dt);
         if (p === this.rusher) a.pos.x += (Math.sign(a.pos.x) * 4.2 - a.pos.x) * dt * 0.6;
@@ -395,41 +432,85 @@ export class Game {
 
   private pocket(dt: number) {
     const drop = Math.min(1, this.t / 0.8);
-    this.w.camera.position.set(this.qb.x, this.qb.y + Math.sin(this.t * 9) * 0.02 * (1 - drop), this.qb.z - 1.4 * drop);
+    this.qbOff.x = THREE.MathUtils.clamp(this.qbOff.x - this.stick[0] * 2.6 * dt, -2.2, 2.2);
+    this.qbOff.y = THREE.MathUtils.clamp(this.qbOff.y + this.stick[1] * 2.0 * dt, -1.4, 1.0);
+    const moving = Math.hypot(this.stick[0], this.stick[1]) > 0.2;
+    this.w.camera.position.set(this.qb.x + this.qbOff.x, this.qb.y + Math.sin(this.t * (moving ? 11 : 9)) * (moving ? 0.035 : 0.02 * (1 - drop)),
+      this.qb.z - 1.4 * drop + this.qbOff.y);
+    if (this.rng() < dt * 1.5) this.sfx(this.rng() < 0.5 ? 'grunt' : 'grunt2', new THREE.Vector3((this.rng() - 0.5) * 6, 1, this.losZ), 0.45);
     this.pressure = THREE.MathUtils.clamp(1 - (this.sackT - this.playT) / 1.5, 0, 1);
     if (this.pressure > 0 && Math.floor((this.t - dt) * (2 + 5 * this.pressure)) !== Math.floor(this.t * (2 + 5 * this.pressure)))
       this.h.buzz(50, 0.3 + 0.5 * this.pressure);
     const r = this.def.get(this.rusher)!;
     const cam = this.w.camera.position;
-    if (Math.hypot(r.pos.x - cam.x, r.pos.z - cam.z) < 1.3) this.startSack();
+    const dr = Math.hypot(r.pos.x - cam.x, r.pos.z - cam.z);
+    if (dr < 3.2 && this.playT > this.sackT - 0.8) this.tsTarget = 0.45;
+    if (dr < 1.3) this.startSack();
   }
 
   private startSack() {
     this.state = 'SACK'; this.t = 0;
     const r = this.def.get(this.rusher)!;
-    r.play('Tackle', 0.1, 1, true);
-    this.w.shake = 0.35;
-    this.w.post.mat.uniforms.uFlash.value = 0.35;
-    this.audio.play('hit_pads', 1);
-    this.audio.play('crowd_roar', 0.5, 0.9, 'crowd');
+    const cam = this.w.camera.position;
+    const dir = cam.clone().sub(r.pos).setY(0);
+    if (dir.lengthSq() < 0.01) dir.set(0, 0, -1);
+    dir.normalize();
+    this.sackFx = { dir, start: cam.clone(), fwd: dir.clone().negate(), hit: 0 };
+    r.data.done = true;
+    r.face(cam);
+    r.play('Tackle', 0.08, 1.1, true);
+    this.w.shake = 0.3;
+    this.w.post.mat.uniforms.uFlash.value = 0.3;
+    this.sfx('helmet_hit', cam, 1.2); this.sfx('hit_pads', cam, 1.1); this.sfx('grunt2', cam, 1.1);
+    this.audio.play('crowd_roar', 0.6, 0.9, 'crowd');
     this.h.buzz(300, 1);
-    this.spikeOU = 0.9;
-    this.w.fpArm.visible = false;
+    this.spikeOU = 0.95;
     const fumble = this.rng() < 0.12, lost = fumble && this.rng() < 0.5;
     this.stats.sacks++;
-    this.result = { kind: lost ? 'fumble' : 'sack', yards: -7, time: this.playT + 5 };
-    this.h.banner(lost ? 'FUMBLE' : 'SACKED', lost ? 'OKLAHOMA RECOVERS' : fumble ? 'TEXAS RECOVERS' : '-7 YARDS', '#841617');
+    this.result = { kind: lost ? 'fumble' : 'sack', yards: -7, time: this.playT + 5, why: fumble ? (lost ? 'lost' : 'recovered') : '' };
+    this.continueBall = fumble;
+    if (fumble) { this.ball.pos.copy(this.handPos()); this.ball.vel.set((this.rng() - 0.5) * 4, 3, (this.rng() - 0.5) * 4); this.w.football.visible = true; }
   }
 
+  /** First person: knocked backward, look up at the sky, helmet slams the turf and bounces, rusher stands over you. */
   private sack(dt: number) {
-    const f = Math.min(1, this.t / 0.5);
-    const cam = this.w.camera;
-    cam.position.y = THREE.MathUtils.lerp(cam.position.y, 0.45, f * 0.3);
-    cam.up.set(Math.sin(f * 0.9), Math.cos(f * 0.9), 0);
-    this.w.post.mat.uniforms.uFlash.value *= 0.9;
-    for (const p of ['DE1', 'DE2'] as DefPos[]) this.def.get(p)!.vel.multiplyScalar(0.9);
-    if (this.t > 0.6 && this.result?.kind === 'fumble') this.def.get(this.rusher)!.play('HornsDown', 0.3);
-    if (this.t > 1.3) this.toDead();
+    const fx = this.sackFx, cam = this.w.camera, t = this.t;
+    const r = this.def.get(this.rusher)!;
+    const fall = Math.min(1, t / 0.55);
+    let y = THREE.MathUtils.lerp(1.9, 0.26, fall * fall);
+    let pitch = fall * 1.15;
+    if (t > 0.55 && fx.hit === 0) {
+      fx.hit = 1;
+      this.sfx('thud', cam.position, 1.3); this.sfx('helmet_hit', cam.position, 0.8, 0.8);
+      this.w.shake = 0.28; this.w.post.mat.uniforms.uDaze.value = 1;
+      this.h.buzz(250, 1); this.audio.muffle(1.8); this.audio.play('ear_ring', 0.45);
+    }
+    if (t > 0.55) { const k = (t - 0.55) / 0.32; if (k < 1) { y = 0.26 + Math.sin(k * Math.PI) * 0.2; pitch = 1.15 - Math.sin(k * Math.PI) * 0.25; } }
+    if (t > 0.87 && fx.hit === 1) { fx.hit = 2; this.sfx('thud', cam.position, 0.8, 1.2); this.w.shake = 0.12; this.h.buzz(120, 0.7); }
+    if (t > 1.0 && fx.hit === 2) {
+      fx.hit = 3;
+      const k = this.result!.kind, why = this.result!.why;
+      this.h.banner(k === 'fumble' ? 'FUMBLE' : 'SACKED', k === 'fumble' ? 'OKLAHOMA RECOVERS' : why === 'recovered' ? 'TEXAS RECOVERS' : '-7 YARDS', '#841617');
+    }
+    const slide = Math.min(1, t / 0.7);
+    const pos = fx.start.clone().addScaledVector(fx.dir, 1.6 * (1 - (1 - slide) ** 2));
+    cam.position.set(pos.x, y, pos.z);
+    const look = cam.position.clone().addScaledVector(fx.fwd, Math.cos(pitch) * 5).add(new THREE.Vector3(0, Math.sin(pitch) * 5, 0));
+    if (t > 1.25) look.lerp(r.pos.clone().setY(1.7), Math.min(1, (t - 1.25) * 1.5));
+    this.lookAt.copy(look);
+    const roll = Math.sin(fall * 1.2) * 0.3 * (t > 1.25 ? Math.max(0, 1 - (t - 1.25)) : 1);
+    cam.up.set(-fx.fwd.z * Math.sin(roll), Math.cos(roll), fx.fwd.x * Math.sin(roll));
+    if (t < 0.6) r.pos.copy(cam.position).setY(0).addScaledVector(fx.fwd, 0.55 - t * 0.3);
+    else if (t > 1.1 && r.current !== 'HornsDown') {
+      r.pos.copy(fx.start).addScaledVector(fx.dir, 1.6).addScaledVector(fx.fwd, 1.3).setY(0);
+      r.face(cam.position); r.play('HornsDown', 0.3);
+      this.sfx('grunt', r.pos, 0.6, 0.8);
+    }
+    this.w.fpArm.visible = t < 0.8;
+    this.w.fpArm.rotation.x = -fall * 1.4;
+    this.w.fpArm.position.y = -0.17 + fall * 0.25;
+    if (t < 0.3) this.tsTarget = 0.4;
+    if (t > 2.6) this.toDead();
     void dt;
   }
 
@@ -450,6 +531,7 @@ export class Game {
 
   private air(dt: number) {
     const b = this.ball;
+    if (b.target && this.timeToArrival() < 0.7) this.tsTarget = 0.3;
     b.vel.y -= G * dt;
     b.pos.addScaledVector(b.vel, dt);
     b.throwT += dt;
@@ -501,6 +583,7 @@ export class Game {
     const contested = [...this.def.values()].some(d => d.pos.distanceTo(r.pos) < 2);
     this.yacGoal = r.pos.z + (a + this.rng() * (b - a)) * YD * (contested ? 0.4 : 1);
     this.audio.play('catch_thud', 1);
+    if (contested) { this.sfx('hit_pads', r.pos, 1); this.sfx('grunt2', r.pos, 0.9); }
     this.audio.play('crowd_roar', 0.7, 1, 'crowd');
     this.h.buzz(60, 0.6); setTimeout(() => this.h.buzz(60, 0.6), 120);
     this.spikeTex = Math.min(1, 0.45 + (r.pos.z - this.losZ) / 30);
@@ -536,6 +619,7 @@ export class Game {
   private run(dt: number) {
     const c = this.carrier!;
     const isInt = this.result?.kind === 'int';
+    if (this.t < 0.45) this.tsTarget = 0.3;
     if (this.t < 0.35) { c.vel.multiplyScalar(0.85); c.pos.addScaledVector(c.vel, dt); }
     else {
       const goal = new THREE.Vector3(c.pos.x * 0.98, 0, isInt ? c.pos.z - 10 : c.pos.z + 10);
@@ -552,7 +636,8 @@ export class Game {
       if (!oob) { tackler.pos.copy(c.pos).add(new THREE.Vector3(0.4, 0, isInt ? -0.6 : 0.7)); tackler.face(c.pos); tackler.play('Tackle', 0.1, 1, true); tackler.data.done = true; }
       c.play('Fall', 0.1, 1, true); c.data.done = true;
       c.vel.set(0, 0, 0);
-      this.audio.play('hit_pads', 0.9);
+      this.sfx('hit_pads', c.pos, 1); this.sfx('helmet_hit', c.pos, 0.6);
+      this.sfx(this.rng() < 0.5 ? 'grunt' : 'grunt2', c.pos, 0.9);
       this.audio.play('whistle', 0.6);
       this.w.shake = 0.08;
       if (isInt) { this.toDead(); return; }
@@ -641,8 +726,10 @@ export class Game {
     const drive = 1 - this.ballOn / 45;
     const late = this.down >= 3 ? 0.2 : 0;
     const playing = this.state !== 'TITLE' && this.state !== 'OVER';
-    let tex = playing ? 0.25 + 0.25 * drive + late + 0.15 * this.pressure : 0.3;
-    let ou = playing ? 0.18 + (this.down >= 3 ? 0.18 : 0) + 0.2 * this.pressure : 0.2;
+    const clutchT = (this.down === 4 ? 0.3 : 0) + (this.toGo < 3 && this.down > 1 ? 0.15 : 0) + (this.clock < 30 ? 0.3 : this.clock < 60 ? 0.12 : 0);
+    const clutchO = (this.down === 4 ? 0.25 : 0) + (this.clock < 30 ? 0.2 : 0);
+    let tex = playing ? 0.25 + 0.25 * drive + late + 0.15 * this.pressure + clutchT : 0.3;
+    let ou = playing ? 0.18 + (this.down >= 3 ? 0.18 : 0) + 0.2 * this.pressure + clutchO : 0.2;
     if (this.state === 'OVER') { tex = this.win ? 1 : 0.05; ou = this.win ? 0.05 : 1; }
     this.spikeTex = Math.max(0, this.spikeTex - dt / 7);
     this.spikeOU = Math.max(0, this.spikeOU - dt / 6);
@@ -668,11 +755,13 @@ export class Game {
       this.lookAt.lerp(look, Math.min(1, dt * 10));
     } else if (s === 'AIR') {
       const base = new THREE.Vector3(0, 1.5, this.losZ + 22);
-      this.lookAt.lerp(base.lerp(this.ball.pos, 0.55), Math.min(1, dt * 6));
+      const tg = this.ball.target;
+      const focus = tg && this.timeScale < 0.7 ? tg.pos.clone().setY(1.4).lerp(this.ball.pos, 0.4) : base.lerp(this.ball.pos, 0.55);
+      this.lookAt.lerp(focus, Math.min(1, dt * 6));
     } else if ((s === 'RUN' || s === 'DEAD') && this.carrier) {
       this.lookAt.lerp(this.carrier.pos.clone().setY(1.2), Math.min(1, dt * 4));
     }
-    if (s === 'DEAD' && this.continueBall && this.ball.pos.y > 0.05) {
+    if ((s === 'DEAD' || s === 'SACK') && this.continueBall && this.ball.pos.y > 0.05) {
       const b = this.ball;
       b.vel.y -= G * dt; b.pos.addScaledVector(b.vel, dt);
       if (b.pos.y < 0.12) { b.pos.y = 0.12; b.vel.multiplyScalar(0.5); b.vel.y = Math.abs(b.vel.y) * 0.4; }
@@ -705,4 +794,14 @@ function rangeOf(v: number, th: number, h: number) {
   const vy = v * Math.sin(th), vx = v * Math.cos(th);
   const T = (vy + Math.sqrt(vy * vy + 2 * G * Math.max(0, h))) / G;
   return vx * T;
+}
+
+/** 1 = released right at peak arm speed (0..40 ms after), falls to 0 by ~150 ms off. */
+export function releaseQuality(timingMs: number) {
+  const err = Math.max(0, Math.abs(timingMs - 15) - 30);
+  return Math.max(0, 1 - err / 120);
+}
+function releaseText(t: number, q: number) {
+  if (q > 0.85) return 'RELEASE PERFECT';
+  return `RELEASE ${Math.abs(Math.round(t))} MS ${t > 15 ? 'LATE' : 'EARLY'}`;
 }

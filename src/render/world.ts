@@ -18,16 +18,21 @@ export function loadTex(n: string, repeat = false) {
 /** Low-res render + one post pass: Bayer dither, posterize, grain, vignette, pocket-pressure red edge. */
 function makePost() {
   const mat = new THREE.ShaderMaterial({
-    uniforms: { tScene: { value: null }, uTime: { value: 0 }, uPressure: { value: 0 }, uFlash: { value: 0 },
+    uniforms: { tScene: { value: null }, uTime: { value: 0 }, uPressure: { value: 0 }, uFlash: { value: 0 }, uDaze: { value: 0 },
       uRes: { value: new THREE.Vector2(INTERNAL_W, INTERNAL_H) }, uPixel: { value: 1 } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }',
     fragmentShader: `
-      uniform sampler2D tScene; uniform float uTime, uPressure, uFlash, uPixel; uniform vec2 uRes; varying vec2 vUv;
+      uniform sampler2D tScene; uniform float uTime, uPressure, uFlash, uPixel, uDaze; uniform vec2 uRes; varying vec2 vUv;
       float bayer(vec2 p){ int x=int(mod(p.x,4.)), y=int(mod(p.y,4.)); int i=x+y*4;
         int m[16]=int[16](0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5); return float(m[i])/16.-.5; }
       float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
       void main(){
         vec3 c = texture2D(tScene, vUv).rgb;
+        if (uDaze > .01) {   // double vision + desaturate after a hit
+          vec3 c2 = texture2D(tScene, vUv + vec2(.018, .006) * uDaze * (1. + .4*sin(uTime*7.))).rgb;
+          c = mix(c, (c + c2) * .5, uDaze);
+          c = mix(c, vec3(dot(c, vec3(.3,.59,.11))), uDaze * .6);
+        }
         if (uPixel > .5) {
           vec2 px = floor(vUv*uRes);
           float lv = 32.;
@@ -37,6 +42,7 @@ function makePost() {
         vec2 d = vUv - .5;
         float vig = smoothstep(.85, .25, length(d*vec2(1.1,1.)));
         c *= mix(.55, 1., vig);
+        c *= 1. - uDaze * .75 * (1. - vig * .7);
         c = mix(c, vec3(.6,.02,.02), uPressure * (1.-vig) * .7);
         c += uFlash;
         gl_FragColor = vec4(c, 1.);

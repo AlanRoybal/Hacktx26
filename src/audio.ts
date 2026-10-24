@@ -1,6 +1,7 @@
 /** Web Audio graph: music / crowd / sfx buses -> compressor. Crowd opens up (gain + low-pass) with the pulse. */
 const CLIPS = ['crowd_bed', 'crowd_roar', 'crowd_ooh', 'crowd_boo', 'texas_fight', 'eyes_of_texas', 'wabash', 'march_grandioso',
-  'boomer_sooner', 'cannon', 'whistle', 'hit_pads', 'whoosh', 'catch_thud', 'heartbeat', 'horn', 'cadence'] as const;
+  'boomer_sooner', 'cannon', 'whistle', 'hit_pads', 'whoosh', 'catch_thud', 'heartbeat', 'horn', 'cadence',
+  'grunt', 'grunt2', 'helmet_hit', 'thud', 'ear_ring'] as const;
 export type Clip = typeof CLIPS[number];
 
 export class Audio {
@@ -15,6 +16,9 @@ export class Audio {
   private musicSrc: { src: AudioBufferSourceNode; g: GainNode } | null = null;
   private musicName = '';
   private started = false;
+  private muffleUntil = 0;
+  /** Dazed after a sack: crowd goes muffled for a moment. */
+  muffle(sec: number) { this.muffleUntil = this.ctx.currentTime + sec; }
 
   constructor() {
     this.crowdLP.type = 'lowpass';
@@ -98,7 +102,7 @@ export class Audio {
   pulse(hype: number, pressure: number) {
     const t = this.ctx.currentTime;
     this.crowd.gain.setTargetAtTime(Math.pow(10, (-14 + 14 * hype) / 20) * 1.6, t, 0.25);
-    this.crowdLP.frequency.setTargetAtTime(1200 * Math.pow(10, hype), t, 0.25);
+    this.crowdLP.frequency.setTargetAtTime(t < this.muffleUntil ? 320 : 1200 * Math.pow(10, hype), t, t < this.muffleUntil ? 0.05 : 0.4);
     this.heart.gain.setTargetAtTime(pressure > 0.35 ? (pressure - 0.35) * 1.4 : 0, t, 0.1);
   }
 }
