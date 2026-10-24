@@ -1,3 +1,4 @@
-node_modules/
-*.blend1
-__pycache__/
+node_modules
+dist
+assets/blender/__pycache__
+tools/imu-traces/*.json
