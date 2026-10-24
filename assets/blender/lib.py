@@ -315,3 +315,59 @@ def turntable(name, target=(0, 0, 1.0), dist=4.0, height=1.4, angles=(30, 120, 2
 
 def args():
     return sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
+
+
+def smooth(ob):
+    for p in ob.data.polygons:
+        p.use_smooth = True
+    return ob
+
+
+def loft(name, a, b, rings, segs=10, material=None, side=(1, 0, 0), caps=True, smooth_shade=True):
+    """Tube from a to b. rings: (t, rx, ry[, du, dw]) cross-sections; rx lies along `side`, w = axis x side.
+    Vertex i belongs to ring i // segs; ring t values are stored in ob['ring_t']."""
+    a, b = Vector(a), Vector(b)
+    ax = b - a
+    L = ax.length
+    ax.normalize()
+    s = Vector(side)
+    u = (s - ax * s.dot(ax)).normalized()
+    w = ax.cross(u)
+    bm = bmesh.new()
+    vr = []
+    for r in rings:
+        t, rx, ry = r[:3]
+        du, dw = (r[3], r[4]) if len(r) > 3 else (0.0, 0.0)
+        c = a + ax * (t * L) + u * du + w * dw
+        vr.append([bm.verts.new(c + u * (rx * math.cos(2 * math.pi * j / segs)) + w * (ry * math.sin(2 * math.pi * j / segs)))
+                   for j in range(segs)])
+    for p, q in zip(vr, vr[1:]):
+        for j in range(segs):
+            bm.faces.new((p[j], p[(j + 1) % segs], q[(j + 1) % segs], q[j]))
+    if caps:
+        bm.faces.new(vr[0][::-1])
+        bm.faces.new(vr[-1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    ob = new_obj(name, bm, material)
+    ob['ring_t'] = [r[0] for r in rings]
+    ob['segs'] = segs
+    return smooth(ob) if smooth_shade else ob
+
+
+def tube(name, pts, r, segs=6, material=None):
+    """Polyline tube (facemask bars, chains)."""
+    parts = []
+    for p, q in zip(pts, pts[1:]):
+        parts.append(loft(name, p, q, [(0, r, r), (1, r, r)], segs, material,
+                          side=(0, 0, 1) if abs(Vector(q)[2] - Vector(p)[2]) < 0.8 * (Vector(q) - Vector(p)).length else (1, 0, 0)))
+    return join(parts, name) if len(parts) > 1 else parts[0]
+
+
+def weights(ob, fn):
+    """fn(index, co) -> {bone: weight}."""
+    groups = {}
+    for v in ob.data.vertices:
+        for bone, wt in fn(v.index, v.co).items():
+            if bone not in groups:
+                groups[bone] = ob.vertex_groups.get(bone) or ob.vertex_groups.new(name=bone)
+            groups[bone].add([v.index], wt, 'REPLACE')

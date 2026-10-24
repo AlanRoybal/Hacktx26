@@ -4,7 +4,7 @@ import sys, os, math, json
 sys.path.insert(0, os.path.dirname(__file__))
 import bpy
 import numpy as np
-from mathutils import Vector
+from mathutils import Vector, Matrix
 import lib, build_stadium, build_props, build_player, build_ball
 
 YD = 0.9144
@@ -63,8 +63,8 @@ def beams_glow(strength=0.012):
     nt.links.new(add.outputs[0], nt.nodes['Material Output'].inputs['Surface'])
 
 
-def place(colors, sfx, pos, action, frame, facing):
-    root, rig, meshes, acts = build_player.build_player(colors, sfx)
+def place(colors, sfx, pos, action, frame, facing, number):
+    root, rig, meshes, acts = build_player.build_player(dict(colors, number=str(number)), f'{sfx}_{number}')
     root.location = (pos[0], pos[1], 0)
     root.rotation_euler = (0, 0, math.radians(facing))
     build_player.pose_at(rig, acts[action], frame)
@@ -80,10 +80,10 @@ def formation():
             ((-3.3, LOS - 0.9), 'Stance3pt', 8), ((2.6, LOS - 5), 'Idle', 20), ((-2.6, LOS - 5), 'Idle', 35),
             ((-20, LOS - 6), 'Idle', 0), ((18, LOS - 6), 'Idle', 45), ((-11, LOS - 5), 'Idle', 15),
             ((8, LOS - 13), 'Backpedal', 4), ((-8, LOS - 13), 'Backpedal', 12)]
-    for i, (p, a, f) in enumerate(off):
-        place(T, '', p, a, f, 0)
-    for i, (p, a, f) in enumerate(deff):
-        place(O, '_ou', p, a, f, 180)
+    for (p, a, f), n in zip(off, [55, 72, 65, 78, 70, 86, 1, 11, 4, 7]):
+        place(T, '', p, a, f, 0, n)
+    for (p, a, f), n in zip(deff, [90, 95, 9, 44, 23, 10, 2, 7, 13, 8, 21]):
+        place(O, '_ou', p, a, f, 180, n)
 
 
 def setup_render():
@@ -183,8 +183,10 @@ if __name__ == '__main__':
     cam.location = qb
     lib.look_at(cam, (0, LOS - 25, 0.6))
     root.parent = cam
-    root.location = (0.30, -0.34, -0.55)
-    root.rotation_euler = (math.radians(70), math.radians(-12), math.radians(14))
+    axes = Matrix(((-1, 0, 0), (0, 0, 1), (0, 1, 0)))
+    tilt = Matrix.Rotation(math.radians(18), 3, 'Z') @ Matrix.Rotation(math.radians(-28), 3, 'X')
+    root.matrix_parent_inverse = Matrix.Identity(4)
+    root.matrix_basis = Matrix.Translation((0.24, -0.27, -0.52)) @ (axes @ tilt).to_4x4()
     paths = [shot('scene_fp', qb, (0, LOS - 25, 0.6), 24)]
     root.hide_render = True
     for o in (arm, fball):

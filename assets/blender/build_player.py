@@ -2,7 +2,7 @@
 blender -b --python assets/blender/build_player.py [-- --no-render]"""
 import sys, os, math
 sys.path.insert(0, os.path.dirname(__file__))
-import bpy
+import bpy, bmesh
 import numpy as np
 from mathutils import Vector, Matrix, Euler
 import lib
@@ -29,126 +29,183 @@ for s, x in (('L', 1), ('R', -1)):
         (f'foot_{s}', (0.12 * x, 0.02, 0.10), (0.12 * x, -0.14, 0.04), f'shin_{s}'),
     ]
 
-DIGITS = {
-    '0': ['XXX', 'X.X', 'X.X', 'X.X', 'XXX'], '1': ['.X.', 'XX.', '.X.', '.X.', 'XXX'],
-    '2': ['XXX', '..X', 'XXX', 'X..', 'XXX'], '3': ['XXX', '..X', '.XX', '..X', 'XXX'],
-    '4': ['X.X', 'X.X', 'XXX', '..X', '..X'], '5': ['XXX', 'X..', 'XXX', '..X', 'XXX'],
-    '6': ['XXX', 'X..', 'XXX', 'X.X', 'XXX'], '7': ['XXX', '..X', '.X.', '.X.', '.X.'],
-    '8': ['XXX', 'X.X', 'XXX', 'X.X', 'XXX'], '9': ['XXX', 'X.X', 'XXX', '..X', 'XXX'],
-}
-LONGHORN = [
-    'X......................X',
-    'XX....................XX',
-    '.XX..................XX.',
-    '..XXX..............XXX..',
-    '...XXXXX........XXXXX...',
-    '.....XXXXXXXXXXXXXX.....',
-    '.......XXXXXXXXXX.......',
-    '........XXXXXXXX........',
-    '.........XXXXXX.........',
-    '.........XXXXXX.........',
-    '..........XXXX..........',
-    '...........XX...........',
-]
-OU_LOGO = [
-    '....XXXXXXXX....',
-    '..XXX......XXX..',
-    '.XX..........XX.',
-    'XX..XX....XX..XX',
-    'XX..XX....XX..XX',
-    'XX..XX....XX..XX',
-    'XX..XX....XX..XX',
-    '.XX.XX....XX.XX.',
-    '..XXXX....XXXX..',
-    '....XX....XX....',
-    '....XXX..XXX....',
-    '.....XXXXXX.....',
-]
-
-
-def number_image(num, tag):
-    rows = ['' for _ in range(5)]
-    for i, d in enumerate(num):
-        for r in range(5):
-            rows[r] += ('.' if i else '') + DIGITS[d][r]
-    w = len(rows[0])
-    side = max(w, 5) + 2
-    padded = ['.' * side] + [('.' * ((side - w) // 2) + r).ljust(side, '.') for r in rows] + ['.' * side] * (side - 6)
-    return lib.image_from_array(f'numbers_{tag}', lib.pixel_art(padded, '#FFFFFF', scale=8))
-
-
-def logo_image(kind):
-    if kind == 'texas':
-        return lib.image_from_array('logo_texas', lib.pixel_art(LONGHORN, '#BF5700', scale=4, pad=2))
-    rows = [r.center(24, '.') for r in OU_LOGO]
-    return lib.image_from_array('logo_ou', lib.pixel_art(rows, '#F2EEE6', scale=4, pad=2))
+def team_image(fname):
+    img = bpy.data.images.get(fname) or bpy.data.images.load(os.path.join(lib.TEXTURES, fname))
+    img.pack()
+    return img
 
 
 def materials(c, sfx=''):
     M = {k: lib.mat(k + sfx, c[k], tex='grime') for k in ('jersey', 'pants', 'helmet', 'socks', 'gloves', 'shoes')}
     M['facemask'] = lib.mat('facemask' + sfx, c['facemask'], rough=0.5, tex=None)
     M['skin'] = lib.mat('skin' + sfx, c['skin'], rough=0.7, tex='grime_skin')
-    M['numbers'] = lib.mat('numbers' + sfx, c['numbers'], image=number_image(c['number'], c['number'] + sfx), alpha_clip=True)
-    M['helmet_logo'] = lib.mat('helmet_logo' + sfx, '#FFFFFF', image=logo_image(c['logo']), alpha_clip=True)
-    M['face'] = lib.mat('face' + sfx, '#0B0B0B', tex=None)
+    M['tape'] = lib.mat('tape', '#E6E2D8', tex='grime')
+    M['sole'] = lib.mat('sole', '#0E0E0E', tex=None)
+    M['numbers'] = lib.mat('numbers' + sfx, c['numbers'], image=team_image('numbers_atlas.png'), alpha_clip=True)
+    M['helmet_logo'] = lib.mat('helmet_logo' + sfx, '#FFFFFF', image=team_image(f"logo_{c['logo']}_hd.png"), alpha_clip=True)
     return M
 
 
-def build_body(M, sfx=''):
-    parts = []  # (obj, bone)
+TORSO = [(1.00, .165, .118), (1.12, .175, .122), (1.24, .195, .13), (1.36, .228, .142), (1.46, .255, .15), (1.53, .235, .14)]
 
-    def add(ob, bone, uv=0.5):
-        lib.apply(ob)
+
+def torso_r(z):
+    for (z0, a0, b0), (z1, a1, b1) in zip(TORSO, TORSO[1:]):
+        if z <= z1:
+            s = max(0.0, (z - z0) / (z1 - z0))
+            return a0 + (a1 - a0) * s, b0 + (b1 - b0) * s
+    return TORSO[-1][1:]
+
+
+def ramp(x, x0, x1, a, b):
+    s = min(1.0, max(0.0, (x - x0) / (x1 - x0)))
+    return {a: 1 - s, b: s} if 0 < s < 1 else {(a if s <= 0 else b): 1.0}
+
+
+def torso_w(_i, co):
+    z = co.z
+    if z < 1.16:
+        return ramp(z, 1.07, 1.16, 'hips', 'spine')
+    return ramp(z, 1.25, 1.34, 'spine', 'chest')
+
+
+def limb_w(ob, bone, parent=None, child=None, t0=0.15, t1=0.85):
+    ts, segs = list(ob['ring_t']), ob['segs']
+    n = len(ts) * segs
+
+    def fn(i, _co):
+        t = ts[min(i // segs, len(ts) - 1)] if i < n else ts[-1]
+        if parent and t < t0:
+            s = 0.5 + 0.5 * t / t0
+            return {bone: s, parent: 1 - s}
+        if child and t > t1:
+            s = 0.5 * (t - t1) / (1 - t1)
+            return {bone: 1 - s, child: s}
+        return {bone: 1.0}
+    lib.weights(ob, fn)
+    return ob
+
+
+def decal(name, zc, w, h, number, back, material):
+    """Number decal that follows the torso ellipse. UVs pick the number's cell in the 10x10 atlas."""
+    bm = bmesh.new()
+    uvl = bm.loops.layers.uv.new('UVMap')
+    col, row = number % 10, number // 10
+    u0, u1, v0, v1 = col / 10, (col + 1) / 10, 1 - (row + 1) / 10, 1 - row / 10
+    cols, rows = 6, 2
+    grid = []
+    for r in range(rows + 1):
+        z = zc - h / 2 + h * r / rows
+        rx, ry = torso_r(z)
+        line = []
+        for c in range(cols + 1):
+            x = -w / 2 + w * c / cols
+            y = (ry * math.sqrt(max(0.0, 1 - (x / rx) ** 2)) + 0.006) * (1 if back else -1)
+            line.append((bm.verts.new((-x if back else x, y, z)), (c / cols, r / rows)))
+        grid.append(line)
+    for r in range(rows):
+        for c in range(cols):
+            q = [grid[r][c], grid[r][c + 1], grid[r + 1][c + 1], grid[r + 1][c]]
+            f = bm.faces.new([v for v, _ in q])
+            for loop, (_, (s, t)) in zip(f.loops, q):
+                loop[uvl].uv = (u0 + (u1 - u0) * s, v0 + (v1 - v0) * t)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    ob = lib.new_obj(name, bm, material)
+    return lib.smooth(ob)
+
+
+def build_body(M, number, sfx=''):
+    parts = []
+    B = {b[0]: b for b in BONES}
+
+    def add(ob, fn=None, bone=None, uv=0.5):
         if uv:
             lib.box_uv(ob, uv)
-        parts.append((ob, bone))
+        if fn:
+            lib.weights(ob, fn)
+        elif bone:
+            lib.weights(ob, lambda i, co: {bone: 1.0})
+        parts.append(ob)
         return ob
 
-    add(lib.box('pelvis', (0.36, 0.25, 0.22), (0, 0, 1.0), M['pants'], taper=(1.06, 1.04)), 'hips')
-    add(lib.box('belly', (0.34, 0.25, 0.24), (0, 0, 1.2), M['jersey'], taper=(1.18, 1.1)), 'spine')
-    add(lib.box('chest', (0.46, 0.31, 0.24), (0, 0, 1.40), M['jersey'], taper=(1.05, 1.0)), 'chest')
-    add(lib.box('pads', (0.70, 0.37, 0.13), (0, 0, 1.53), M['jersey'], taper=(0.72, 0.8)), 'chest')
+    pants = [(0.0, .158, .118), (0.35, .172, .125), (0.75, .17, .12), (1.0, .166, .118)]
+    add(lib.loft('pelvis', (0, 0, 0.86), (0, 0, 1.08), pants, 14, M['pants']), torso_w)
+    add(lib.loft('belt', (0, 0, 1.02), (0, 0, 1.05), [(0, .169, .121), (1, .169, .121)], 14, M['sole']), torso_w)
+    jt = [((z - 1.0) / 0.53, a, b) for z, a, b in TORSO]
+    add(lib.loft('torso', (0, 0, 1.0), (0, 0, 1.53), jt, 14, M['jersey']), torso_w)
+    pads = lib.sphere('pads', 1.0, (0, 0.005, 1.465), 20, 10, M['jersey'], scale=(0.325, 0.19, 0.105))
+    lib.apply(pads)
+    add(lib.smooth(pads), bone='chest')
     for s, x in (('L', 1), ('R', -1)):
-        add(lib.box(f'pad_{s}', (0.2, 0.33, 0.15), (0.27 * x, 0, 1.49), M['jersey'], taper=(0.75, 0.85)), 'chest')
-        add(lib.box(f'sleeve_{s}', (0.16, 0.16, 0.13), (0.29 * x, 0, 1.39), M['jersey'], taper=(1.1, 1.1)), f'upperarm_{s}')
-        add(lib.box(f'bicep_{s}', (0.12, 0.125, 0.2), (0.30 * x, 0, 1.25), M['skin'], taper=(1.1, 1.1)), f'upperarm_{s}')
-        add(lib.box(f'forearm_{s}', (0.10, 0.105, 0.25), (0.322 * x, -0.01, 1.05), M['skin'], taper=(1.2, 1.2)), f'forearm_{s}')
-        add(lib.box(f'hand_{s}', (0.075, 0.1, 0.12), (0.336 * x, -0.025, 0.87), M['gloves']), f'hand_{s}')
-        add(lib.box(f'thigh_{s}', (0.17, 0.19, 0.44), (0.115 * x, 0, 0.74), M['pants'], taper=(1.12, 1.12)), f'thigh_{s}')
-        add(lib.box(f'knee_{s}', (0.15, 0.06, 0.1), (0.12 * x, -0.09, 0.53), M['pants']), f'thigh_{s}')
-        add(lib.box(f'shin_{s}', (0.12, 0.13, 0.42), (0.12 * x, 0.01, 0.31), M['socks'], taper=(1.18, 1.2)), f'shin_{s}')
-        add(lib.box(f'shoe_{s}', (0.11, 0.27, 0.09), (0.12 * x, -0.05, 0.045), M['shoes'], taper=(1, 0.9)), f'foot_{s}')
-    add(lib.cyl('neck', 0.075, 0.12, (0, 0, 1.58), 8, M['skin']), 'neck')
-    add(lib.box('face', (0.16, 0.05, 0.15), (0, -0.115, 1.70), M['face']), 'head', uv=0)
-    # numbers: front, back, and shoulder tops
-    add(lib.quad('num_front', (0, -0.161, 1.37), (1, 0, 0), (0, 0, 1), 0.22, 0.22, M['numbers']), 'chest', uv=0)
-    add(lib.quad('num_back', (0, 0.161, 1.37), (-1, 0, 0), (0, 0, 1), 0.24, 0.24, M['numbers']), 'chest', uv=0)
-
+        ep = lib.sphere(f'epaulet_{s}', 1.0, (0.255 * x, 0.0, 1.505), 12, 7, M['jersey'], scale=(0.115, 0.15, 0.07))
+        lib.apply(ep)
+        add(lib.smooth(ep), bone='chest')
+        _, sh, el, _ = B[f'upperarm_{s}']
+        _, _, wr, _ = B[f'forearm_{s}']
+        _, _, ht, _ = B[f'hand_{s}']
+        sl = lib.loft(f'sleeve_{s}', sh, el, [(0.0, .095, .1), (0.25, .092, .095), (0.42, .082, .085)], 10, M['jersey'])
+        add(limb_w(sl, f'upperarm_{s}'))
+        ua = lib.loft(f'upperarm_{s}', sh, el, [(0.0, .07, .075), (0.5, .07, .073), (0.9, .058, .06), (1.0, .055, .057)], 10, M['skin'])
+        add(limb_w(ua, f'upperarm_{s}', child=f'forearm_{s}'))
+        fa = lib.loft(f'forearm_{s}', el, wr, [(0.0, .055, .057), (0.3, .058, .062), (0.8, .043, .04), (1.0, .038, .035)], 10, M['skin'])
+        add(limb_w(fa, f'forearm_{s}', parent=f'upperarm_{s}'))
+        tp = lib.loft(f'tape_{s}', el, wr, [(0.78, .047, .045), (1.0, .042, .04)], 10, M['tape'])
+        add(limb_w(tp, f'forearm_{s}'))
+        hd = lib.loft(f'glove_{s}', wr, ht, [(0.0, .03, .04), (0.45, .028, .05), (0.8, .022, .046), (1.0, .015, .03)], 8, M['gloves'])
+        add(limb_w(hd, f'hand_{s}'))
+        th = Vector(wr) + Vector((-0.012 * x, -0.035, -0.03))
+        tb = lib.loft(f'thumb_{s}', th, th + Vector((-0.01 * x, -0.025, -0.055)), [(0, .014, .014), (1, .01, .01)], 6, M['gloves'])
+        add(limb_w(tb, f'hand_{s}'))
+        _, hp, kn, _ = B[f'thigh_{s}']
+        _, _, an, _ = B[f'shin_{s}']
+        tg = lib.loft(f'thigh_{s}', hp, kn, [(0.0, .1, .11), (0.3, .097, .108), (0.75, .076, .082), (1.0, .066, .07)], 10, M['pants'])
+        add(limb_w(tg, f'thigh_{s}', parent='hips', child=f'shin_{s}', t0=0.12, t1=0.9))
+        kp = lib.loft(f'kneepad_{s}', hp, kn, [(0.84, .068, .074, 0, 0.012), (0.98, .07, .078, 0, 0.016), (1.08, .064, .07, 0, 0.012)], 10, M['pants'])
+        add(limb_w(kp, f'thigh_{s}', child=f'shin_{s}', t1=0.95))
+        sp = lib.loft(f'shin_pants_{s}', kn, an, [(0.0, .066, .07), (0.17, .061, .066)], 10, M['pants'])
+        add(limb_w(sp, f'shin_{s}', parent=f'thigh_{s}', t0=0.1))
+        sk = lib.loft(f'sock_{s}', kn, an, [(0.12, .058, .062), (0.42, .058, .07, 0, -0.012), (0.8, .042, .045), (1.0, .036, .04)], 10, M['socks'])
+        add(limb_w(sk, f'shin_{s}'))
+        hx = 0.12 * x
+        cl = lib.loft(f'cleat_{s}', (hx, 0.075, 0.07), (hx, -0.175, 0.045),
+                      [(0.0, .038, .04), (0.2, .048, .055), (0.55, .05, .042), (0.85, .045, .03), (1.0, .03, .018)], 10, M['shoes'], side=(1, 0, 0))
+        add(cl, bone=f'foot_{s}')
+        so = lib.box(f'sole_{s}', (0.1, 0.25, 0.018), (hx, -0.05, 0.012), M['sole'])
+        lib.apply(so)
+        add(so, bone=f'foot_{s}')
+    nk = lib.loft('neck', (0, 0, 1.47), (0, 0, 1.66), [(0, .068, .07), (1, .06, .062)], 10, M['skin'])
+    add(nk, lambda i, co: ramp(co.z, 1.58, 1.66, 'neck', 'head'))
+    hdm = lib.sphere('head', 1.0, (0, -0.005, 1.735), 12, 8, M['skin'], scale=(0.095, 0.105, 0.115))
+    lib.apply(hdm)
+    add(lib.smooth(hdm), bone='head')
+    add(decal('num_front', 1.33, 0.2, 0.19, number, False, M['numbers']), bone='chest', uv=0)
+    add(decal('num_back', 1.31, 0.24, 0.23, number, True, M['numbers']), bone='chest', uv=0)
     return parts
 
 
 def build_helmet(M, sfx=''):
-    shell = lib.sphere('helmet' + sfx, 0.152, (0, 0.012, 1.735), u=10, v=7, material=M['helmet'], scale=(1, 1.14, 1.04))
+    shell = lib.sphere('helmet' + sfx, 1.0, (0, 0.012, 1.752), 20, 12, M['helmet'], scale=(0.148, 0.168, 0.152))
     lib.apply(shell)
-    # cut the face opening: drop the front-lower verts back in
-    for v in shell.data.vertices:
-        if v.co.y < -0.08 and v.co.z < 1.74:
-            v.co.y = max(v.co.y, -0.11)
+    bm = bmesh.new()
+    bm.from_mesh(shell.data)
+    kill = [f for f in bm.faces if (lambda c: (c.y < -0.05 and c.z < 1.775 and abs(c.x) < 0.108) or c.z < 1.63)(f.calc_center_median())]
+    bmesh.ops.delete(bm, geom=kill, context='FACES')
+    bm.to_mesh(shell.data)
+    bm.free()
     lib.box_uv(shell, 0.5)
-    bars = []
-    for z in (1.655, 1.705):
-        bars.append(lib.box('bar', (0.2, 0.018, 0.018), (0, -0.16, z), M['facemask']))
-    bars.append(lib.box('bar', (0.018, 0.018, 0.09), (0, -0.165, 1.68), M['facemask']))
+    lib.smooth(shell)
+    r = 0.0085
+    bars = [lib.tube('bar', [(-0.13, -0.07, 1.735), (-0.10, -0.145, 1.718), (0, -0.178, 1.712), (0.10, -0.145, 1.718), (0.13, -0.07, 1.735)], r, 6, M['facemask']),
+            lib.tube('bar', [(-0.12, -0.08, 1.68), (-0.085, -0.155, 1.655), (0, -0.183, 1.642), (0.085, -0.155, 1.655), (0.12, -0.08, 1.68)], r, 6, M['facemask']),
+            lib.tube('bar', [(-0.10, -0.15, 1.778), (0, -0.168, 1.778), (0.10, -0.15, 1.778)], r, 6, M['facemask']),
+            lib.tube('bar', [(0, -0.17, 1.778), (0, -0.178, 1.712), (0, -0.183, 1.642)], r, 6, M['facemask'])]
     for x in (1, -1):
-        bars.append(lib.box('bar', (0.018, 0.08, 0.018), (0.1 * x, -0.125, 1.70), M['facemask'], rot=(0, 0, math.radians(-35 * x))))
-        bars.append(lib.box('bar', (0.018, 0.018, 0.1), (0.1 * x, -0.15, 1.68), M['facemask']))
-    for b in bars:
-        lib.apply(b)
+        bars.append(lib.tube('bar', [(0.075 * x, -0.155, 1.776), (0.075 * x, -0.16, 1.716), (0.068 * x, -0.168, 1.65)], r, 6, M['facemask']))
     mask = lib.join(bars, 'facemask' + sfx)
-    logos = [lib.quad('logo_L', (0.156, 0.02, 1.75), (0, 1, 0), (0, 0, 1), 0.13, 0.075, M['helmet_logo']),
-             lib.quad('logo_R', (-0.156, 0.02, 1.75), (0, -1, 0), (0, 0, 1), 0.13, 0.075, M['helmet_logo'])]
-    for lg in logos:
-        lib.apply(lg)
+    strap = lib.tube('chinstrap', [(-0.125, -0.07, 1.665), (-0.06, -0.13, 1.61), (0, -0.14, 1.6), (0.06, -0.13, 1.61), (0.125, -0.07, 1.665)], 0.011, 6, M['tape'])
+    mask = lib.join([mask, strap], 'facemask' + sfx)
+    logos = [lib.quad('logo_L', (0.151, 0.02, 1.755), (0, 1, 0), (0, 0, 1), 0.13, 0.065, M['helmet_logo']),
+             lib.quad('logo_R', (-0.151, 0.02, 1.755), (0, -1, 0), (0, 0, 1), 0.13, 0.065, M['helmet_logo'])]
     logo = lib.join(logos, 'helmet_logo' + sfx)
     return [shell, mask, logo]
 
@@ -320,10 +377,8 @@ def make_actions(rig, sfx=''):
 
 def build_player(colors, sfx='', offset=(0, 0, 0)):
     M = materials(colors, sfx)
-    parts = build_body(M, sfx)
-    for ob, bone in parts:
-        ob.vertex_groups.new(name=bone).add(list(range(len(ob.data.vertices))), 1.0, 'REPLACE')
-    body = lib.join([o for o, _ in parts], 'body' + sfx)
+    parts = build_body(M, int(colors['number']), sfx)
+    body = lib.join(parts, 'body' + sfx)
     helm = build_helmet(M, sfx)
     for h in helm:
         h.vertex_groups.new(name='head').add(list(range(len(h.data.vertices))), 1.0, 'REPLACE')

@@ -64,13 +64,16 @@ def bench(name, loc=(0, 0, 0), team='#BF5700'):
 
 
 def crowd_unit(name, loc=(0, 0, 0)):
-    """~40 tri fan: torso, head, both arms raised. Faces -Y. Code instances it and sets per-instance color."""
+    """~90 tri fan: torso, head, arms raised. Faces -Y. Code instances it and sets per-instance color."""
     shirt = lib.mat('crowd_shirt', '#FFFFFF', tex='grime')
     skin = lib.mat('crowd_skin', '#A06E4C', rough=0.8, tex=None)
-    parts = [lib.box('torso', (0.42, 0.26, 0.55), (0, 0, 0.45), shirt, taper=(1.1, 1.0)),
-             lib.box('head', (0.2, 0.22, 0.24), (0, 0, 0.86), skin)]
+    parts = [lib.loft('torso', (0, 0, 0.2), (0, 0, 0.72), [(0, .2, .13), (0.6, .21, .12), (1, .17, .1)], 6, shirt),
+             lib.loft('neck', (0, 0, 0.7), (0, 0, 0.78), [(0, .05, .05), (1, .045, .045)], 4, skin)]
+    hd = lib.sphere('head', 1.0, (0, -0.01, 0.87), 6, 5, skin, scale=(0.095, 0.105, 0.115))
+    lib.apply(hd)
+    parts.append(lib.smooth(hd))
     for x in (1, -1):
-        parts.append(lib.box('arm', (0.1, 0.1, 0.5), (0.25 * x, -0.03, 0.95), shirt, rot=(0, math.radians(-12 * x), 0)))
+        parts.append(lib.tube('arm', [(0.19 * x, 0, 0.66), (0.26 * x, -0.06, 0.92), (0.24 * x, -0.04, 1.16)], 0.045, 4, shirt))
     return finish(parts, name, 0.5, loc)
 
 

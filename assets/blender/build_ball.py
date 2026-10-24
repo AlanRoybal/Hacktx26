@@ -12,7 +12,7 @@ def build_ball(name='football', loc=(0, 0, 0)):
     white = lib.mat('ball_white', '#EDE9DF', rough=0.7, tex='grime')
     R, L = 0.085, 0.14
     bm = bmesh.new()
-    rings, segs = 11, 12
+    rings, segs = 13, 16
     verts = []
     for i in range(1, rings):
         t = -1 + 2 * i / rings
@@ -28,6 +28,7 @@ def build_ball(name='football', loc=(0, 0, 0)):
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     ball = lib.new_obj(name, bm, leather)
     lib.box_uv(ball, 0.25)
+    lib.smooth(ball)
     parts = [ball]
     for s in (1, -1):
         t = 0.62
@@ -47,27 +48,30 @@ def build_ball(name='football', loc=(0, 0, 0)):
 
 
 def build_arm():
-    """Right forearm + glove holding the ball, camera-space friendly: elbow at origin, pointing -Y (forward)."""
+    """Right forearm + glove holding the ball. Elbow at origin, hand toward -Y, palm up (+Z)."""
     jersey = lib.mat('jersey', '#BF5700', tex='grime')
     skin = lib.mat('skin', '#8A5A3C', rough=0.7, tex='grime_skin')
     glove = lib.mat('gloves', '#E4E2DC', tex='grime')
     band = lib.mat('wristband', '#EDEAE2', tex='grime')
-    tape = lib.mat('tape', '#D9D4C7', tex='grime')
+    tape = lib.mat('tape', '#E6E2D8', tex='grime')
+    W = (0, -0.27, 0)
     parts = [
-        lib.box('sleeve', (0.15, 0.14, 0.15), (0, 0.04, 0), jersey, rot=(math.radians(90), 0, 0)),
-        lib.box('forearm', (0.105, 0.30, 0.10), (0, -0.16, 0), skin, taper=(1, 1)),
-        lib.box('band', (0.115, 0.05, 0.11), (0, -0.29, 0), band),
-        lib.box('palm', (0.10, 0.11, 0.05), (0, -0.37, 0.02), glove),
-        lib.box('fingers', (0.10, 0.08, 0.03), (0, -0.44, 0.045), glove, rot=(math.radians(-25), 0, 0)),
-        lib.box('thumb', (0.03, 0.07, 0.03), (-0.06, -0.38, 0.05), glove, rot=(0, 0, math.radians(30))),
-        lib.box('tape', (0.108, 0.03, 0.104), (0, -0.20, 0), tape),
+        lib.loft('sleeve', (0, 0.14, 0), (0, -0.02, 0), [(0, .078, .082), (0.7, .072, .075), (1, .066, .068)], 12, jersey),
+        lib.loft('forearm', (0, 0, 0), W, [(0, .052, .055), (0.3, .056, .058), (0.85, .04, .036), (1, .037, .033)], 12, skin),
+        lib.loft('tape', (0, 0, 0), W, [(0.5, .052, .052), (0.68, .048, .047)], 12, tape),
+        lib.loft('band', (0, 0, 0), W, [(0.8, .046, .043), (1.0, .043, .04)], 12, band),
+        lib.loft('palm', W, (0, -0.36, 0.015), [(0, .04, .03), (0.5, .048, .028), (1, .044, .022)], 10, glove),
+        lib.tube('thumb', [(0.042, -0.29, 0.02), (0.058, -0.335, 0.055), (0.052, -0.37, 0.095)], 0.012, 6, glove),
     ]
+    for k, x in enumerate((-0.033, -0.011, 0.011, 0.033)):
+        ln = 1 - 0.12 * abs(k - 1.5)
+        parts.append(lib.tube('finger', [(x, -0.355, 0.022), (x * 1.1, -0.40 * ln - 0.0, 0.065), (x * 1.15, -0.425 * ln, 0.105)], 0.0105, 6, glove))
     for p in parts:
-        lib.apply(p)
         lib.box_uv(p, 0.3)
+        lib.smooth(p)
     arm = lib.join(parts, 'fp_arm')
-    ball = build_ball('fp_ball', (0, -0.42, 0.13))
-    ball.rotation_euler = (math.radians(-10), 0, math.radians(75))
+    ball = build_ball('fp_ball', (0, -0.40, 0.15))
+    ball.rotation_euler = (math.radians(-15), 0, math.radians(80))
     root = bpy.data.objects.new('fp_root', None)
     bpy.context.scene.collection.objects.link(root)
     arm.parent = root
