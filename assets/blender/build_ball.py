@@ -47,36 +47,69 @@ def build_ball(name='football', loc=(0, 0, 0)):
     return ob
 
 
+R_BALL, L_BALL = 0.085, 0.14
+
+
+def on_ball(y, phi, off):
+    """Point on the ball surface (ball long axis = Y, laces at +Z, phi from +Z toward +X), pushed out by off."""
+    r = R_BALL * (1 - (y / L_BALL) ** 2) + off
+    return (r * math.sin(math.radians(phi)), y, r * math.cos(math.radians(phi)))
+
+
 def build_arm():
-    """Right forearm + glove holding the ball. Elbow at origin, hand toward -Y, palm up (+Z)."""
+    """Right hand gripping the ball across the laces. Origin = ball center, nose toward -Y, laces +Z.
+    The hand sits on the -X side (the QB's right), fingers wrap over the laces, thumb underneath."""
     jersey = lib.mat('jersey', '#BF5700', tex='grime')
     skin = lib.mat('skin', '#8A5A3C', rough=0.7, tex='grime_skin')
     glove = lib.mat('gloves', '#E4E2DC', tex='grime')
     band = lib.mat('wristband', '#EDEAE2', tex='grime')
     tape = lib.mat('tape', '#E6E2D8', tex='grime')
-    W = (0, -0.27, 0)
+    E, W = Vector((-0.13, 0.40, -0.11)), Vector((-0.10, 0.125, -0.035))
+    fr = 0.0105
     parts = [
-        lib.loft('sleeve', (0, 0.14, 0), (0, -0.02, 0), [(0, .078, .082), (0.7, .072, .075), (1, .066, .068)], 12, jersey),
-        lib.loft('forearm', (0, 0, 0), W, [(0, .052, .055), (0.3, .056, .058), (0.85, .04, .036), (1, .037, .033)], 12, skin),
-        lib.loft('tape', (0, 0, 0), W, [(0.5, .052, .052), (0.68, .048, .047)], 12, tape),
-        lib.loft('band', (0, 0, 0), W, [(0.8, .046, .043), (1.0, .043, .04)], 12, band),
-        lib.loft('palm', W, (0, -0.36, 0.015), [(0, .04, .03), (0.5, .048, .028), (1, .044, .022)], 10, glove),
-        lib.tube('thumb', [(0.042, -0.29, 0.02), (0.058, -0.335, 0.055), (0.052, -0.37, 0.095)], 0.012, 6, glove),
+        lib.loft('sleeve', E + (E - W).normalized() * 0.14, E - (E - W).normalized() * 0.02, [(0, .078, .082), (0.7, .072, .075), (1, .066, .068)], 12, jersey),
+        lib.loft('forearm', E, W, [(0, .052, .055), (0.3, .056, .058), (0.85, .04, .036), (1, .037, .033)], 12, skin),
+        lib.loft('tape', E, W, [(0.5, .052, .052), (0.68, .048, .047)], 12, tape),
+        lib.loft('band', E, W, [(0.8, .046, .043), (1.0, .043, .04)], 12, band),
     ]
-    for k, x in enumerate((-0.033, -0.011, 0.011, 0.033)):
-        ln = 1 - 0.12 * abs(k - 1.5)
-        parts.append(lib.tube('finger', [(x, -0.355, 0.022), (x * 1.1, -0.40 * ln - 0.0, 0.065), (x * 1.15, -0.425 * ln, 0.105)], 0.0105, 6, glove))
+    # palm: flattened slab hugging the ball's right side, from the wrist to the finger roots
+    pc0, pc1 = Vector(on_ball(0.075, -105, 0.022)), Vector(on_ball(0.01, -92, 0.016))
+    palm = lib.loft('palm', W, pc0, [(0, .036, .03), (1, .042, .016)], 10, glove, side=(0, 0, 1))
+    palm2 = lib.loft('palm2', pc0, pc1, [(0, .046, .016), (1, .044, .014)], 10, glove, side=(0, 0, 1))
+    parts += [palm, palm2]
+    # fingers: index nearest the back tip, pinky toward the middle, each wraps from the side over the laces
+    for k, (y, reach) in enumerate(((0.052, 30), (0.028, 42), (0.004, 38), (-0.02, 22))):
+        angles = [-88, -60, -32, -6, reach * 0.5, reach]
+        pts = [on_ball(y + 0.004 * (a / 90.0), a, fr + 0.001) for a in angles]
+        parts.append(lib.tube('finger', pts, fr if k < 3 else fr * 0.9, 6, glove))
+    thumb = [on_ball(0.07, -112, 0.016), on_ball(0.062, -135, fr), on_ball(0.05, -160, fr), on_ball(0.04, -182, fr)]
+    parts.append(lib.tube('thumb', thumb, 0.012, 6, glove))
     for p in parts:
         lib.box_uv(p, 0.3)
         lib.smooth(p)
     arm = lib.join(parts, 'fp_arm')
-    ball = build_ball('fp_ball', (0, -0.40, 0.15))
-    ball.rotation_euler = (math.radians(-15), 0, math.radians(80))
+    ball = build_ball('fp_ball', (0, 0, 0))
     root = bpy.data.objects.new('fp_root', None)
     bpy.context.scene.collection.objects.link(root)
     arm.parent = root
     ball.parent = root
     return root, arm, ball
+
+
+def grip_previews(root):
+    cam = lib.preview_scene(target=(0, 0, 0), dist=0.9, height=0.3, light_power=300, ground=False)
+    sc = bpy.context.scene
+    root.location = (0, 0, 0.0)
+    paths = []
+    for i, (ang, h) in enumerate(((200, 0.25), (110, 0.15), (300, 0.35), (20, -0.2))):
+        r = math.radians(ang)
+        cam.location = (-math.sin(r) * 0.75, -math.cos(r) * 0.75 + 0.1, h)
+        lib.look_at(cam, (-0.03, 0.08, 0.0))
+        p = os.path.join(lib.RENDERS, 'raw', f'grip_{i}.png')
+        sc.render.filepath = p
+        bpy.ops.render.render(write_still=True)
+        paths.append(p)
+    return paths
 
 
 if __name__ == '__main__':
@@ -91,19 +124,4 @@ if __name__ == '__main__':
     lib.export('fp_arm', selection=[root, arm, fball])
     lib.save('fp_arm')
     if '--no-render' not in lib.args():
-        b2 = build_ball('ball_preview', (0.55, 0.1, 0.09))
-        b2.rotation_euler = (0, math.radians(8), math.radians(35))
-        root.location = (-0.25, 0.25, 0.25)
-        root.rotation_euler = (0, 0, math.radians(-30))
-        cam = lib.preview_scene(target=(0.2, -0.05, 0.15), dist=1.6, height=1.0, light_power=400)
-        sc = bpy.context.scene
-        paths = []
-        for i, ang in enumerate((20, 140)):
-            r = math.radians(ang)
-            cam.location = (0.2 - math.sin(r) * 1.4, -0.05 - math.cos(r) * 1.4, 0.75)
-            lib.look_at(cam, (0.2, -0.05, 0.15))
-            p = os.path.join(lib.RENDERS, 'raw', f'ball_{i}.png')
-            sc.render.filepath = p
-            bpy.ops.render.render(write_still=True)
-            paths.append(p)
-        print('RENDERS', paths)
+        print('RENDERS', grip_previews(root))

@@ -184,9 +184,9 @@ if __name__ == '__main__':
     lib.look_at(cam, (0, LOS - 25, 0.6))
     root.parent = cam
     axes = Matrix(((-1, 0, 0), (0, 0, 1), (0, 1, 0)))
-    tilt = Matrix.Rotation(math.radians(18), 3, 'Z') @ Matrix.Rotation(math.radians(-28), 3, 'X')
+    tilt = Matrix.Rotation(math.radians(55), 3, 'Z') @ Matrix.Rotation(math.radians(-18), 3, 'X')
     root.matrix_parent_inverse = Matrix.Identity(4)
-    root.matrix_basis = Matrix.Translation((0.24, -0.27, -0.52)) @ (axes @ tilt).to_4x4()
+    root.matrix_basis = Matrix.Translation((0.25, -0.17, -0.7)) @ (axes @ tilt).to_4x4()
     paths = [shot('scene_fp', qb, (0, LOS - 25, 0.6), 24)]
     root.hide_render = True
     for o in (arm, fball):
