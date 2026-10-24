@@ -56,7 +56,7 @@ export class Game {
   timeScale = 1; tsTarget = 1;   // slow motion
   stick = [0, 0];                // pocket movement (x = right, y = up/forward)
   qbOff = new THREE.Vector2();
-  sackFx = { dir: v3(), start: v3(), fwd: v3(), hit: 0 };
+  sackFx = { dir: v3(), start: v3(), fwd: v3(), hit: 0, mates: [] as Actor[] };
   private hudT = 0;
   rng = mulberry(Date.now() & 0xffff);
   private jumboUntil = 0;
@@ -165,6 +165,7 @@ export class Game {
     if (down && (this.state === 'TITLE' || (this.state === 'OVER' && this.t > 2))) return this.start();
     if (down && this.state === 'PRESNAP' && this.t > 0.6) this.snap();
     if (down && this.state === 'CUTSCENE' && this.t > 1.5) this.t = 99;
+    if (down && this.state === 'SACK' && this.t > 1.6) this.t = 99;
   }
 
   snap() {
@@ -455,7 +456,10 @@ export class Game {
     const dir = cam.clone().sub(r.pos).setY(0);
     if (dir.lengthSq() < 0.01) dir.set(0, 0, -1);
     dir.normalize();
-    this.sackFx = { dir, start: cam.clone(), fwd: dir.clone().negate(), hit: 0 };
+    // two nearest teammates come over to celebrate
+    const mates = [...this.def.values()].filter(d => d !== r).sort((a, b) => a.pos.distanceTo(r.pos) - b.pos.distanceTo(r.pos)).slice(0, 2);
+    this.sackFx = { dir, start: cam.clone(), fwd: dir.clone().negate(), hit: 0, mates };
+    this.w.drawJumbo(['SACK!'], '#841617', '#FDF9D8');
     r.data.done = true;
     r.face(cam);
     r.play('Tackle', 0.08, 1.1, true);
@@ -496,22 +500,39 @@ export class Game {
     const pos = fx.start.clone().addScaledVector(fx.dir, 1.6 * (1 - (1 - slide) ** 2));
     cam.position.set(pos.x, y, pos.z);
     const look = cam.position.clone().addScaledVector(fx.fwd, Math.cos(pitch) * 5).add(new THREE.Vector3(0, Math.sin(pitch) * 5, 0));
-    if (t > 1.25) look.lerp(r.pos.clone().setY(1.7), Math.min(1, (t - 1.25) * 1.5));
+    // after the bounce: sit up and watch the celebration over you
+    const spot = fx.start.clone().addScaledVector(fx.dir, 1.6).addScaledVector(fx.fwd, 1.5).setY(0);
+    if (t > 1.25) {
+      const sit = Math.min(1, (t - 1.6) / 0.8);
+      if (sit > 0) cam.position.y = THREE.MathUtils.lerp(0.26, 0.85, sit * sit * (3 - 2 * sit));
+      const group = spot.clone().setY(1.3);
+      look.lerp(t < 1.9 ? r.pos.clone().setY(1.7) : group, Math.min(1, (t - 1.25) * 1.5));
+    }
     this.lookAt.copy(look);
     const roll = Math.sin(fall * 1.2) * 0.3 * (t > 1.25 ? Math.max(0, 1 - (t - 1.25)) : 1);
     cam.up.set(-fx.fwd.z * Math.sin(roll), Math.cos(roll), fx.fwd.x * Math.sin(roll));
     if (t < 0.6) r.pos.copy(cam.position).setY(0).addScaledVector(fx.fwd, 0.55 - t * 0.3);
-    else if (t > 1.1 && r.current !== 'HornsDown') {
-      r.pos.copy(fx.start).addScaledVector(fx.dir, 1.6).addScaledVector(fx.fwd, 1.3).setY(0);
-      r.face(cam.position); r.play('HornsDown', 0.3);
+    else if (t > 1.1 && !r.data.cel) {
+      r.data.cel = 1;
+      r.pos.copy(spot); r.face(cam.position); r.play('HornsDown', 0.3, 1, true);
       this.sfx('grunt', r.pos, 0.6, 0.8);
     }
+    if (r.data.cel === 1 && t > 1.9) { r.data.cel = 2; r.play('SackDance', 0.25, 1.2); this.audio.playMusic('boomer_sooner', false, 0.8); this.w.jumboLive(); }
+    fx.mates.forEach((m, i) => {
+      m.data.done = true;
+      const side = (i === 0 ? 1 : -1);
+      const tgt = spot.clone().add(new THREE.Vector3(fx.fwd.z * side, 0, -fx.fwd.x * side).multiplyScalar(1.3)).addScaledVector(fx.fwd, 0.6);
+      if (t > 1.0 && t < 2.6) { this.moveTo(m, tgt, 7.5, dt); if (m.vel.length() > 0.5) { m.play('Run', 0.2, 1.1); m.heading = Math.atan2(m.vel.x, m.vel.z); } }
+      if (t > 2.6 && !m.data.bump) { m.data.bump = 1; m.vel.set(0, 0, 0); m.face(r.pos); m.play('ChestBump', 0.15, 1, true); if (i === 0) { r.face(m.pos); r.play('ChestBump', 0.15, 1, true); r.data.cel = 3; this.audio.play('crowd_roar', 0.5, 0.9, 'crowd'); } setTimeout(() => this.sfx('hit_pads', m.pos, 0.7, 1.2), 450); }
+      if (t > 3.6 && m.data.bump === 1) { m.data.bump = 2; m.face(cam.position); m.play(i === 0 ? 'Celebrate' : 'HornsDown', 0.3, 1, i !== 0); }
+    });
+    if (r.data.cel === 3 && t > 4.0) { r.data.cel = 4; r.face(cam.position); r.play('Flex', 0.25); }
+    // QB's own arm flails up on the hit, then drops out of view
     this.w.fpArm.visible = t < 0.8;
     this.w.fpArm.rotation.x = -fall * 1.4;
     this.w.fpArm.position.y = -0.17 + fall * 0.25;
     if (t < 0.3) this.tsTarget = 0.4;
-    if (t > 2.6) this.toDead();
-    void dt;
+    if (t > 5.2) this.toDead();
   }
 
   private timeToArrival() {
@@ -770,9 +791,9 @@ export class Game {
     if (s !== 'TITLE' && s !== 'OVER') cam.lookAt(this.lookAt);
     if (s === 'POCKET' && this.w.fpArm.visible && this.armSwing < 0) this.w.fpArm.quaternion.slerp(this.handQ, 1);
     // jumbotron broadcast camera: high sideline, follows the ball
-    const focus = this.state === 'RUN' || this.state === 'CUTSCENE' ? this.carrier?.pos ?? this.ball.pos : this.ball.live ? this.ball.pos : new THREE.Vector3(0, 0, this.losZ + 4);
+    const focus = this.state === 'SACK' ? this.def.get(this.rusher)!.pos : this.state === 'RUN' || this.state === 'CUTSCENE' ? this.carrier?.pos ?? this.ball.pos : this.ball.live ? this.ball.pos : new THREE.Vector3(0, 0, this.losZ + 4);
     this.jumboCamTarget.lerp(focus, Math.min(1, dt * 3));
-    const close = this.state === 'CUTSCENE';
+    const close = this.state === 'CUTSCENE' || (this.state === 'SACK' && this.t > 1.9);
     this.w.jumboCam.position.set(close ? this.jumboCamTarget.x + 9 : 58, close ? 3 : 24, this.jumboCamTarget.z - (close ? 6 : 10));
     this.w.jumboCam.fov = close ? 34 : 28;
     this.w.jumboCam.updateProjectionMatrix();

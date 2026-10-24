@@ -349,6 +349,22 @@ def actions():
     hd = {'upperarm_R': (-50, 15, 0), 'forearm_R': (-10, 0, 0), 'hand_R': (0, 0, 0), 'spine': (15, 0, -15), 'neck': (-10, 0, 0),
           'thigh_L': (-25, 0, 0), 'shin_L': (30, 0, 0), 'upperarm_L': (-20, -20, 0), 'forearm_L': (-60, 0, 0)}
     A['HornsDown'] = (False, {0: {}, 12: hd, 28: P(hd, {'upperarm_R': (-40, 15, 0), 'spine': (20, 0, -20)}), 40: hd})
+    # sack celebrations
+    flex = {'spine': (-12, 0, 0), 'neck': (-15, 0, 0), 'upperarm_L': (-90, -55, 0), 'forearm_L': (-120, 0, 0),
+            'upperarm_R': (-90, 55, 0), 'forearm_R': (-120, 0, 0), 'thigh_L': (-15, 0, -8), 'thigh_R': (-15, 0, 8),
+            'shin_L': (25, 0, 0), 'shin_R': (25, 0, 0), 'loc': (0, 0, -0.06)}
+    A['Flex'] = (True, {0: flex, 20: P(flex, {'spine': (-20, 0, 0), 'neck': (-25, 0, 0), 'forearm_L': (-138, 0, 0), 'forearm_R': (-138, 0, 0),
+                                              'upperarm_L': (-100, -62, 0), 'upperarm_R': (-100, 62, 0), 'loc': (0, 0, -0.11)}), 40: flex})
+    crouch = {'loc': (0, 0, -0.22), 'thigh_L': (-50, 0, 0), 'thigh_R': (-50, 0, 0), 'shin_L': (80, 0, 0), 'shin_R': (80, 0, 0),
+              'foot_L': (-20, 0, 0), 'foot_R': (-20, 0, 0), 'spine': (28, 0, 0), 'upperarm_L': (-30, -10, 0), 'upperarm_R': (-30, 10, 0), 'forearm_L': (-40, 0, 0), 'forearm_R': (-40, 0, 0)}
+    air = {'loc': (0, -0.12, 0.42), 'spine': (-22, 0, 0), 'chest': (-10, 0, 0), 'neck': (-20, 0, 0), 'upperarm_L': (-150, -35, 0), 'upperarm_R': (-150, 35, 0),
+           'forearm_L': (-20, 0, 0), 'forearm_R': (-20, 0, 0), 'thigh_L': (-15, 0, 0), 'thigh_R': (-25, 0, 0), 'shin_L': (30, 0, 0), 'shin_R': (45, 0, 0), 'foot_L': (35, 0, 0), 'foot_R': (35, 0, 0)}
+    A['ChestBump'] = (False, {0: {}, 8: crouch, 15: air, 20: P(air, {'loc': (0, -0.2, 0.3)}), 27: crouch, 36: P(horns, {})})
+    sd = lambda m: {'upperarm_L': (-60 if m > 0 else -150, -40 if m > 0 else -20, 0), 'upperarm_R': (-150 if m > 0 else -60, 20 if m > 0 else 40, 0),
+                    'forearm_L': (-30, 0, 0), 'forearm_R': (-30, 0, 0), 'spine': (8, 0, 18 * m), 'chest': (0, 0, 10 * m), 'hips': (0, 0, 12 * m),
+                    'thigh_L': (-35 if m > 0 else -5, 0, 0), 'shin_L': (50 if m > 0 else 10, 0, 0), 'thigh_R': (-5 if m > 0 else -35, 0, 0),
+                    'shin_R': (10 if m > 0 else 50, 0, 0), 'loc': (0, 0, -0.05), 'neck': (-10, 0, -12 * m)}
+    A['SackDance'] = (True, {0: sd(1), 12: sd(-1), 24: sd(1)})
     return A
 
 
