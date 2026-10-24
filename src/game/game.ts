@@ -6,7 +6,7 @@ import type { ThrowEvent } from '../input/types';
 import type { Audio, Clip } from '../audio';
 
 export type State = 'TITLE' | 'PRESNAP' | 'SNAP' | 'POCKET' | 'AIR' | 'RUN' | 'SACK' | 'DEAD' | 'CUTSCENE' | 'OVER';
-type Result = { kind: 'catch' | 'inc' | 'int' | 'sack' | 'fumble' | 'td'; yards: number; time: number; oob?: boolean; why?: string };
+type Result = { kind: 'catch' | 'inc' | 'int' | 'sack' | 'fumble' | 'td' | 'pi'; yards: number; time: number; oob?: boolean; why?: string };
 
 export interface Hooks {
   banner(text: string, sub?: string, color?: string): void;
@@ -36,7 +36,7 @@ export class Game {
   off = new Map<OffPos, Actor>();
   def = new Map<DefPos, Actor>();
   qb = v3();
-  ball = { pos: v3(), vel: v3(), spin: 0, wobble: 0, live: false, target: null as Actor | null, aim: v3(), throwT: 0, bounced: false, data: null as { missed: boolean } | null };
+  ball = { pos: v3(), vel: v3(), spin: 0, wobble: 0, live: false, target: null as Actor | null, aim: v3(), throwT: 0, bounced: false, data: null as { missed: boolean } | null, reach: false, q: 1 };
   carrier: Actor | null = null;
   yacGoal = 0;
   result: Result | null = null;
@@ -49,7 +49,9 @@ export class Game {
   spikeTex = 0; spikeOU = 0;
   waveT = -1;
   assist = 0.85;
-  armSwing = -1;
+  private armT = -1;
+  private armKind: 'throw' | 'pump' = 'throw';
+  private armFrom = { p: v3(), q: new THREE.Quaternion() };
   lookAt = v3();
   handQ = new THREE.Quaternion();
   aimYaw = 0;          // camera look-off from the controller (rad)
@@ -152,7 +154,9 @@ export class Game {
     this.w.football.rotation.set(0, 0, 0);
     this.w.football.visible = true;
     this.w.fpArm.visible = false;
-    this.pressure = 0; this.armSwing = -1; this.aimYaw = 0;
+    this.pressure = 0; this.armT = -1; this.aimYaw = 0;
+    if (this.w.fpBall) this.w.fpBall.visible = true;
+    this.w.placeChains(z, z + this.toGo * YD);
     this.qbOff.set(0, 0); this.timeScale = this.tsTarget = 1; this.continueBall = false;
     this.w.post.mat.uniforms.uDaze.value = 0;
     this.w.camera.fov = 72; this.w.camera.updateProjectionMatrix();
@@ -191,7 +195,7 @@ export class Game {
   onPumpFake() {
     if (this.state !== 'POCKET') return;
     for (const p of ['S1', 'S2', 'CB1', 'CB2'] as DefPos[]) this.def.get(p)!.data.bite = 0.5;
-    this.armSwing = 0.3;
+    this.startArm('pump');
   }
 
   // ---------- throw ----------
@@ -241,10 +245,9 @@ export class Game {
     const b = this.ball;
     b.pos.copy(hand);
     b.vel.set(Math.sin(yaw) * Math.cos(th), Math.sin(th), Math.cos(yaw) * Math.cos(th)).multiplyScalar(v);
-    b.wobble = wobble; b.spin = 0; b.live = true; b.throwT = 0; b.bounced = false; b.data = null;
+    b.wobble = wobble; b.spin = 0; b.live = true; b.throwT = 0; b.bounced = false; b.data = null; b.reach = false; b.q = q;
     this.w.football.visible = true;
-    this.w.fpArm.visible = true;
-    this.armSwing = 0;
+    this.startArm('throw');
     this.state = 'AIR'; this.t = 0;
     this.stats.att++;
     this.stats.bestSpiral = Math.min(this.stats.bestSpiral, wobble);
@@ -346,14 +349,7 @@ export class Game {
     if (Math.abs(cam.fov - fov) > 0.05) { cam.fov += (fov - cam.fov) * Math.min(1, dtReal * 5); cam.updateProjectionMatrix(); }
     if (s !== 'SACK') this.w.post.mat.uniforms.uDaze.value = Math.max(0, this.w.post.mat.uniforms.uDaze.value - dtReal * 0.7);
     this.all.forEach(a => a.update(dt));
-    if (this.armSwing >= 0) {
-      this.armSwing += dt / 0.28;
-      const k = Math.sin(Math.min(1, this.armSwing) * Math.PI);
-      this.w.fpArm.position.set(0.25, -0.17 + 0.12 * k, -0.7 - 0.35 * k);
-      this.w.fpArm.rotation.x = -1.0 * k;
-      if (this.armSwing > 0.5 && this.state !== 'POCKET') this.w.fpArm.visible = this.armSwing < 1;
-      if (this.armSwing >= 1) { this.armSwing = -1; this.w.fpArm.position.set(0.25, -0.17, -0.7); this.w.fpArm.rotation.x = 0; }
-    }
+    this.updateArm(dt);
   }
 
   private presnapIdle() {
@@ -566,6 +562,16 @@ export class Game {
     fb.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
     fb.rotateZ(b.spin);
     if (b.wobble > 0.1) fb.rotateX(Math.sin(b.throwT * 14) * b.wobble * 0.6);
+    const tg = b.target;
+    if (tg && !b.reach && this.timeToArrival() < 0.42) {
+      b.reach = true;
+      const T = Math.hypot(tg.pos.x - b.pos.x, tg.pos.z - b.pos.z) / Math.max(1, Math.hypot(b.vel.x, b.vel.z));
+      const yAt = b.pos.y + b.vel.y * T - 0.5 * G * T * T;
+      tg.play(yAt > 1.85 ? 'CatchHigh' : yAt < 0.95 ? 'CatchLow' : 'CatchChest', 0.12, 1.15, true);
+      tg.data.done = false;
+      const d = [...this.def.values()].sort((p, q) => p.pos.distanceTo(tg.pos) - q.pos.distanceTo(tg.pos))[0];
+      if (d.pos.distanceTo(tg.pos) < 2.2) { d.face(b.pos); d.play('Swat', 0.1, 1.1, true); }
+    }
     // catch / INT check: closest player in range gets the first chance
     const chest = (a: Actor) => a.pos.clone().setY(1.35).distanceTo(b.pos);
     const defs = [...this.def.values()];
@@ -574,26 +580,15 @@ export class Game {
       for (const p of ELIGIBLE) { const r = this.off.get(p)!; const d = chest(r); if (d < 1.35 && d < wd) { wd = d; who = r; } }
       if (b.vel.y < 0 && b.pos.y < 2.5) for (const d of defs) { const dd = chest(d); if (dd < 1.0 && dd < wd) { wd = dd; who = d; } }
     }
-    if (who && who.team === 'tex') {
-      const r = who;
-      const closeDef = defs.filter(d => d.pos.distanceTo(r.pos) < 1.2);
-      const contest = closeDef.length > 0 ? 1 : 0;
-      const v = b.vel.length();
-      const defCloser = closeDef.some(d => chest(d) < wd);
-      if (contest && defCloser && this.rng() < 0.25 + 0.3 * b.wobble) return this.intercept(closeDef[0]);
-      const pCatch = 0.95 - 0.25 * b.wobble - 0.3 * Math.max(0, (v - 24) / 6) - 0.3 * contest;
-      if (Math.abs(r.pos.x) >= HALF_W) return this.incomplete('OUT OF BOUNDS');
-      if (this.rng() < pCatch) return this.catchBall(r);
-      return this.incomplete(contest ? 'BROKEN UP' : 'DROPPED');
-    }
+    if (who && who.team === 'tex') return this.resolveCatch(who, wd, defs, chest);
     if (who && who.team === 'ou' && !b.data?.missed) {
       const r = this.rng();
-      if (r < (who.data.jumper ? 0.55 : 0.25)) return this.intercept(who);
-      if (r < 0.75) return this.incomplete('BROKEN UP');
+      if (r < (who.data.jumper ? 0.6 : 0.35) + 0.25 * b.wobble) return this.intercept(who);
+      if (r < 0.85) return this.breakup(who, b.target);
       (b as any).data = { missed: true };
     }
     if (b.pos.y < 0.12) {
-      if (!b.bounced) { b.bounced = true; b.vel.multiplyScalar(0.35); b.vel.y = Math.abs(b.vel.y) * 0.6; b.pos.y = 0.12; this.incomplete('INCOMPLETE', false); }
+      if (!b.bounced) { b.bounced = true; b.vel.multiplyScalar(0.35); b.vel.y = Math.abs(b.vel.y) * 0.6; b.pos.y = 0.12; this.incomplete('INCOMPLETE'); }
     }
   }
 
@@ -601,7 +596,7 @@ export class Game {
     this.state = 'RUN'; this.t = 0;
     this.carrier = r;
     this.ball.live = false;
-    r.play('CatchHigh', 0.1, 1.4, true);
+    if (!r.current.startsWith('Catch')) r.play('CatchChest', 0.08, 1.4, true);
     this.stats.comp++;
     const [a, b] = this.play.yac[r.role as OffPos] ?? [1, 6];
     const contested = [...this.def.values()].some(d => d.pos.distanceTo(r.pos) < 2);
@@ -628,15 +623,15 @@ export class Game {
     this.h.buzz(300, 1);
   }
 
-  private incomplete(why: string, stopBall = true) {
-    if (stopBall) { this.ball.vel.multiplyScalar(-0.2); this.ball.vel.y = 2; }
+  private incomplete(why: string, vel?: THREE.Vector3) {
+    if (vel) this.ball.vel.copy(vel);
     this.state = 'DEAD'; this.t = 0;
     this.result = { kind: 'inc', yards: 0, time: this.playT, why };
     this.audio.play('whistle', 0.7);
     this.audio.play('crowd_ooh', 0.8, 1, 'crowd');
     this.spikeOU = 0.35;
     this.h.banner('INCOMPLETE', why);
-    this.continueBall = !stopBall;
+    this.continueBall = true;
   }
   private continueBall = false;
 
@@ -644,11 +639,11 @@ export class Game {
     const c = this.carrier!;
     const isInt = this.result?.kind === 'int';
     if (this.t < 0.45) this.tsTarget = 0.3;
-    if (this.t < 0.35) { c.vel.multiplyScalar(0.85); c.pos.addScaledVector(c.vel, dt); }
+    if (this.t < 0.45) { c.vel.multiplyScalar(0.9); c.pos.addScaledVector(c.vel, dt); }
     else {
       const goal = new THREE.Vector3(c.pos.x * 0.98, 0, isInt ? c.pos.z - 10 : c.pos.z + 10);
       this.moveTo(c, goal, 8.4, dt);
-      c.play('Run', 0.15, 1.3); c.face(goal);
+      c.play('RunBall', 0.2, 1.3); c.face(goal);
     }
     this.ball.pos.copy(c.pos).add(new THREE.Vector3(0.25, 1.15, 0.1));
     this.w.football.position.copy(this.ball.pos);
@@ -673,6 +668,108 @@ export class Game {
       if (first) { this.audio.play('horn', 0.7); this.w.drawJumbo(['FIRST', 'DOWN']); this.jumboUntil = this.t + 3.5; this.spikeTex = Math.max(this.spikeTex, 0.7); }
       this.toDead();
     }
+  }
+
+  /** Ball reached a Texas receiver: separation from the nearest defender decides catch, drop, breakup, pick or flag. */
+  private resolveCatch(r: Actor, wd: number, defs: Actor[], chest: (a: Actor) => number) {
+    const b = this.ball;
+    if (Math.abs(r.pos.x) >= HALF_W) return this.incomplete('OUT OF BOUNDS', b.vel.clone().multiplyScalar(0.6));
+    const d = defs.slice().sort((p, q) => p.pos.distanceTo(r.pos) - q.pos.distanceTo(r.pos))[0];
+    const sep = d.pos.distanceTo(r.pos);
+    const inPhase = chest(d) < wd + 0.35;            // defender has as good a shot at the ball as the receiver
+    const v = b.vel.length();
+    const bad = 0.3 * b.wobble + 0.2 * (1 - b.q) + 0.25 * Math.max(0, (v - 24) / 6);
+    const x = this.rng();
+    if (sep < 1.1 && !inPhase && x < 0.13) return this.flag(d, r);
+    let pInt: number, pPbu: number, pDrop: number;
+    if (sep < 1.0) { pInt = (inPhase ? 0.34 : 0.12) + bad; pPbu = 0.36; pDrop = 0.1; }
+    else if (sep < 2.0) { pInt = (inPhase ? 0.12 : 0.04) + bad * 0.6; pPbu = 0.22; pDrop = 0.1; }
+    else { pInt = 0; pPbu = 0; pDrop = 0.05 + bad; }
+    const y = this.rng();
+    if (y < pInt) return this.intercept(d);
+    if (y < pInt + pPbu) return this.breakup(d, r);
+    if (y < pInt + pPbu + pDrop) return this.drop(r);
+    this.catchBall(r);
+  }
+
+  private breakup(d: Actor, r: Actor | null) {
+    const b = this.ball;
+    d.face(b.pos); d.play('Swat', 0.06, 1.3, true); d.data.done = true;
+    if (r) { r.play('DropReact', 0.15, 1, true); r.data.done = true; r.vel.multiplyScalar(0.3); }
+    this.sfx('hit_pads', b.pos, 1); this.sfx('grunt2', b.pos, 0.8);
+    this.spikeOU = 0.6;
+    this.incomplete('BROKEN UP', new THREE.Vector3((this.rng() - 0.5) * 5, 4 + this.rng() * 2, -b.vel.z * 0.15));
+  }
+
+  private drop(r: Actor) {
+    const b = this.ball;
+    r.play('DropReact', 0.1, 1, true); r.data.done = true; r.vel.multiplyScalar(0.3);
+    this.sfx('catch_thud', b.pos, 0.7, 1.2);
+    this.incomplete('DROPPED', new THREE.Vector3((this.rng() - 0.5) * 2.5, 3.2, b.vel.z * 0.08));
+  }
+
+  /** Defensive pass interference: spot foul (15 max), automatic first down. */
+  private flag(d: Actor, r: Actor) {
+    const b = this.ball;
+    d.face(r.pos); d.play('Tackle', 0.08, 1.2, true); d.data.done = true;
+    r.play('Fall', 0.08, 1, true); r.data.done = true; r.vel.set(0, 0, 0);
+    this.sfx('hit_pads', r.pos, 1.1); this.sfx('grunt', r.pos, 0.9);
+    const yards = Math.max(1, Math.min(15, Math.round((r.pos.z - this.losZ) / YD)));
+    this.state = 'DEAD'; this.t = 0;
+    this.result = { kind: 'pi', yards, time: this.playT, why: d.role };
+    b.vel.set((this.rng() - 0.5) * 3, 2.5, b.vel.z * 0.1); this.continueBall = true;
+    this.audio.play('whistle', 0.8);
+    this.audio.play('crowd_roar', 0.7, 1.05, 'crowd');
+    this.spikeTex = Math.max(this.spikeTex, 0.6);
+    this.w.drawJumbo(['FLAG', 'PASS INTERFERENCE'], '#E8C21E', '#111');
+    this.jumboUntil = this.t + 3;
+    this.h.banner('FLAG', `PASS INTERFERENCE · #${d.number} ${d.name} · ${yards} YDS, AUTO 1ST`, '#C9A400');
+  }
+
+  // ---------- first-person arm ----------
+  private startArm(kind: 'throw' | 'pump') {
+    this.armT = 0; this.armKind = kind;
+    this.armFrom.p.copy(this.w.fpArm.position); this.armFrom.q.copy(this.w.fpArm.quaternion);
+    this.w.fpArm.visible = true;
+  }
+
+  private updateArm(dt: number) {
+    const A = this.w.fpArm, s = this.state;
+    if (s === 'SACK') return;
+    if (this.armT >= 0) {
+      this.armT += dt;
+      const keys = this.armKind === 'throw' ? THROW_KEYS : PUMP_KEYS;
+      if (this.armKind === 'throw' && this.w.fpBall) this.w.fpBall.visible = this.armT < 0.035;
+      let i = 0;
+      while (i < keys.length - 1 && keys[i + 1].t <= this.armT) i++;
+      const a = keys[i], nb = keys[Math.min(keys.length - 1, i + 1)];
+      const f = nb === a ? 1 : THREE.MathUtils.smoothstep((this.armT - a.t) / (nb.t - a.t), 0, 1);
+      const pa = i === 0 ? this.armFrom.p : a.p, qa = i === 0 ? this.armFrom.q : a.q;
+      A.position.lerpVectors(pa, nb.p, f);
+      A.quaternion.slerpQuaternions(qa, nb.q, f);
+      if (this.armT >= keys[keys.length - 1].t) { this.armT = -1; if (this.armKind === 'throw') A.visible = false; }
+      return;
+    }
+    if (s === 'SNAP') {
+      const k = THREE.MathUtils.smoothstep(this.t / 0.35, 0, 1);
+      A.visible = true;
+      if (this.w.fpBall) this.w.fpBall.visible = k >= 1;
+      A.position.set(ARM_REST.x + 0.05 * (1 - k), ARM_REST.y - 0.3 * (1 - k), ARM_REST.z + 0.1 * (1 - k));
+      A.quaternion.setFromEuler(new THREE.Euler(-0.6 * (1 - k), 0, 0));
+      return;
+    }
+    if (s !== 'POCKET') return;
+    if (this.w.fpBall) this.w.fpBall.visible = true;
+    // hand orientation drives the arm; tipping the hand back cocks the ball up beside the helmet
+    const e = new THREE.Euler().setFromQuaternion(this.handQ, 'YXZ');
+    const cock = THREE.MathUtils.clamp(e.x / 1.1, 0, 1);
+    const yaw = THREE.MathUtils.clamp(e.y, -0.7, 0.7);
+    const breathe = Math.sin(this.t * 2.2) * 0.004;
+    const tp = new THREE.Vector3(ARM_REST.x + 0.06 * cock - 0.12 * yaw, ARM_REST.y + 0.2 * cock + breathe, ARM_REST.z + 0.3 * cock);
+    const tq = new THREE.Quaternion().setFromEuler(new THREE.Euler(e.x * 0.85 + 0.3 * cock, yaw * 0.8, e.z * 0.6 - 0.3 * cock, 'YXZ'));
+    const k = Math.min(1, dt * 28);
+    A.position.lerp(tp, k);
+    A.quaternion.slerp(tq, k);
   }
 
   private toDead() { this.state = 'DEAD'; this.t = 0; this.w.fpArm.visible = false; }
@@ -718,6 +815,12 @@ export class Game {
     this.w.camera.up.set(0, 1, 0);
     if (r.kind === 'int' || r.kind === 'fumble') return this.gameOver(false, r.kind === 'int' ? 'INTERCEPTED' : 'FUMBLE LOST');
     this.clock -= Math.ceil(r.time);
+    if (r.kind === 'pi') {
+      this.ballOn = Math.max(1, r.yards >= this.ballOn ? Math.ceil(this.ballOn / 2) : this.ballOn - r.yards);
+      this.down = 1; this.toGo = Math.min(10, this.ballOn);
+      if (this.clock <= 0) this.clock = 1;   // a game can't end on a defensive foul
+      return this.toPresnap();
+    }
     this.ballOn = Math.min(99, this.ballOn - r.yards);
     if (r.yards >= this.toGo) { this.down = 1; this.toGo = Math.min(10, this.ballOn); }
     else { this.down++; this.toGo -= r.yards; }
@@ -793,7 +896,6 @@ export class Game {
       this.w.football.position.copy(b.pos);
     }
     if (s !== 'TITLE' && s !== 'OVER') cam.lookAt(this.lookAt);
-    if (s === 'POCKET' && this.w.fpArm.visible && this.armSwing < 0) this.w.fpArm.quaternion.slerp(this.handQ, 1);
     // jumbotron broadcast camera: high sideline, follows the ball
     const focus = this.state === 'SACK' ? this.def.get(this.rusher)!.pos : this.state === 'RUN' || this.state === 'CUTSCENE' ? this.carrier?.pos ?? this.ball.pos : this.ball.live ? this.ball.pos : new THREE.Vector3(0, 0, this.losZ + 4);
     this.jumboCamTarget.lerp(focus, Math.min(1, dt * 3));
@@ -804,6 +906,17 @@ export class Game {
     this.w.jumboCam.lookAt(this.jumboCamTarget.x, 1, this.jumboCamTarget.z);
   }
 }
+
+const ARM_REST = new THREE.Vector3(0.25, -0.17, -0.7);
+type ArmKey = { t: number; p: THREE.Vector3; q: THREE.Quaternion };
+const armKey = (t: number, p: [number, number, number], r: [number, number, number]): ArmKey =>
+  ({ t, p: new THREE.Vector3(...p), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(r[0], r[1], r[2], 'YXZ')) });
+// release -> whip over the top -> pronated follow-through across the body to the left hip
+const THROW_KEYS: ArmKey[] = [armKey(0, [0, 0, 0], [0, 0, 0]), armKey(0.06, [0.16, 0.03, -0.92], [-0.25, 0.1, -0.35]),
+  armKey(0.15, [0.03, -0.2, -0.82], [-0.9, 0.35, -0.9]), armKey(0.3, [-0.2, -0.48, -0.62], [-1.35, 0.6, -1.25]),
+  armKey(0.5, [-0.3, -0.9, -0.5], [-1.5, 0.6, -1.3])];
+const PUMP_KEYS: ArmKey[] = [armKey(0, [0, 0, 0], [0, 0, 0]), armKey(0.09, [0.2, -0.02, -0.86], [-0.2, 0.05, -0.15]),
+  armKey(0.28, [0.25, -0.17, -0.7], [0, 0, 0])];
 
 /** Launch angle (low arc) to cover horizontal range R with height change h at speed v; raises v if out of reach. */
 export function solve(R: number, h: number, v: number) {

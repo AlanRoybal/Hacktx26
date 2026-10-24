@@ -319,18 +319,24 @@ def mirror(pose):
 ARMS_RUN = lambda a: {'upperarm_L': (a, 0, 0), 'upperarm_R': (-a, 0, 0), 'forearm_L': (-75, 0, 0), 'forearm_R': (-75, 0, 0)}
 
 
-def run_pose(t):
-    """t in [0,1): one full stride."""
+def run_pose(t, carry=False):
+    """t in [0,1): one full stride. Chest counter-rotates the hips, feet flex through push-off, heel kicks up behind."""
     ph = 2 * math.pi * t
-    thighL = -38 * math.cos(ph) + 2
-    thighR = 38 * math.cos(ph) + 2
-    shinL = 20 + 55 * max(0, math.sin(ph))
-    shinR = 20 + 55 * max(0, -math.sin(ph))
-    p = {'thigh_L': (thighL, 0, 0), 'thigh_R': (thighR, 0, 0), 'shin_L': (shinL, 0, 0), 'shin_R': (shinR, 0, 0),
-         'foot_L': (-10, 0, 0), 'foot_R': (-10, 0, 0),
-         'spine': (12, 0, 0), 'chest': (4, 0, 0), 'neck': (-10, 0, 0),
-         'hips': (0, 0, 7 * math.cos(ph)), 'loc': (0, 0, 0.035 * abs(math.sin(ph)) - 0.03)}
-    p.update(ARMS_RUN(-40 * math.cos(ph)))
+    c, sn = math.cos(ph), math.sin(ph)
+    thighL = -40 * c + 2
+    thighR = 40 * c + 2
+    shinL = 18 + 70 * max(0, sn) ** 1.3
+    shinR = 18 + 70 * max(0, -sn) ** 1.3
+    p = {'thigh_L': (thighL, 0, -2), 'thigh_R': (thighR, 0, 2), 'shin_L': (shinL, 0, 0), 'shin_R': (shinR, 0, 0),
+         'foot_L': (-12 + 28 * max(0, -c) * max(0, sn), 0, 0), 'foot_R': (-12 + 28 * max(0, c) * max(0, -sn), 0, 0),
+         'spine': (13, 0, -5 * c), 'chest': (4, 0, -9 * c), 'neck': (-11, 0, 9 * c), 'head': (0, 0, 4 * c),
+         'hips': (2, 0, 9 * c), 'loc': (0, 0, 0.045 * abs(sn) - 0.035)}
+    p.update({'upperarm_L': (-44 * c, 0, -6), 'upperarm_R': (44 * c, 0, 6),
+              'forearm_L': (-82 + 18 * c, 0, 0), 'forearm_R': (-82 - 18 * c, 0, 0),
+              'hand_L': (-10, 0, 0), 'hand_R': (-10, 0, 0)})
+    if carry:   # ball high and tight in the right arm, left arm pumps harder
+        p.update({'upperarm_R': (-28, 0, 22), 'forearm_R': (-118, 0, 0), 'hand_R': (-20, 0, 0),
+                  'upperarm_L': (-55 * c, 0, -8), 'forearm_L': (-78 + 22 * c, 0, 0), 'chest': (6, 0, -12 * c)})
     return p
 
 
@@ -358,7 +364,8 @@ def actions():
               'foot_L': (-30, 0, 0), 'foot_R': (-30, 0, 0), 'spine': (55, 0, 0), 'chest': (15, 0, 0), 'neck': (-55, 0, 0), 'head': (-10, 0, 0),
               'upperarm_R': (-75, 0, 0), 'forearm_R': (0, 0, 0), 'upperarm_L': (-35, -10, 0), 'forearm_L': (-60, 0, 0)}
     A['Stance3pt'] = (True, {0: stance, 15: P(stance, {'spine': (56, 0, 0), 'loc': (0, 0, -0.415)}), 30: stance})
-    A['Run'] = (True, {f: run_pose(f / 18) for f in (0, 3, 6, 9, 12, 15, 18)})
+    A['Run'] = (True, {f: run_pose(f / 18) for f in range(0, 19, 2)})
+    A['RunBall'] = (True, {f: run_pose(f / 18, True) for f in range(0, 19, 2)})
     bp = lambda t: P(CROUCH, {'loc': (0, 0, -0.12), 'spine': (18, 0, 0), 'neck': (-15, 0, 0),
                               'thigh_L': (-30 + 25 * math.cos(t), 0, -6), 'thigh_R': (-30 - 25 * math.cos(t), 0, 6),
                               'shin_L': (45 + 20 * math.sin(t), 0, 0), 'shin_R': (45 - 20 * math.sin(t), 0, 0),
@@ -374,7 +381,43 @@ def actions():
     A['Rush'] = (True, {f: rush(2 * math.pi * f / 20) for f in (0, 5, 10, 15, 20)})
     reach = {'upperarm_L': (-165, -10, 0), 'upperarm_R': (-165, 10, 0), 'forearm_L': (-15, 0, 0), 'forearm_R': (-15, 0, 0), 'neck': (-25, 0, 0), 'head': (-15, 0, 0), 'spine': (-5, 0, 0)}
     tuck = {'upperarm_L': (-35, 0, -20), 'upperarm_R': (-35, 0, 20), 'forearm_L': (-110, 0, 0), 'forearm_R': (-110, 0, 0), 'spine': (10, 0, 0)}
-    A['CatchHigh'] = (False, {0: run_pose(0), 6: P(run_pose(0.3), reach), 12: P(run_pose(0.6), reach), 20: P(run_pose(0.9), tuck)})
+    # catches: track the ball over the shoulder, hands up into a diamond, extend, absorb, then tuck and go
+    look = {'neck': (-18, 0, 25), 'head': (-10, 0, 15), 'chest': (0, 0, 10)}
+    diamond = lambda up, el: {'upperarm_L': (up, -12, 0), 'upperarm_R': (up, 12, 0), 'forearm_L': (el, 0, 8), 'forearm_R': (el, 0, -8),
+                              'hand_L': (25, 0, -15), 'hand_R': (25, 0, 15)}
+    tuckR = {'upperarm_R': (-28, 0, 22), 'forearm_R': (-118, 0, 0), 'hand_R': (-20, 0, 0), 'upperarm_L': (-40, 0, -25),
+             'forearm_L': (-100, 0, 0), 'chest': (8, 0, 0)}
+    A['CatchHigh'] = (False, {0: run_pose(0), 4: P(run_pose(0.2), look), 8: P(run_pose(0.4), look, diamond(-130, -50)),
+                              12: P(run_pose(0.55), {'neck': (-30, 0, 0), 'head': (-15, 0, 0), 'spine': (-6, 0, 0), 'loc': (0, 0, 0.06)}, diamond(-168, -12)),
+                              16: P(run_pose(0.7), {'neck': (-15, 0, 0), 'spine': (6, 0, 0)}, diamond(-115, -75)),
+                              21: P(run_pose(0.85), {'neck': (-8, 0, 0)}, diamond(-55, -115)),
+                              27: run_pose(1.0, True)})
+    A['CatchChest'] = (False, {0: run_pose(0), 5: P(run_pose(0.25), {'neck': (-6, 0, 0)}, diamond(-60, -45)),
+                               10: P(run_pose(0.5), diamond(-82, -25)),
+                               14: P(run_pose(0.65), {'spine': (16, 0, 0)}, diamond(-45, -105)),
+                               20: P(run_pose(0.85), tuckR), 26: run_pose(1.0, True)})
+    scoop = P(CROUCH, {'loc': (0, 0, -0.3), 'spine': (42, 0, 0), 'neck': (-35, 0, 0), 'thigh_L': (-70, 0, -8), 'thigh_R': (-35, 0, 8),
+                       'shin_L': (85, 0, 0), 'shin_R': (75, 0, 0)}, diamond(-38, -15), {'hand_L': (-25, 0, -10), 'hand_R': (-25, 0, 10)})
+    A['CatchLow'] = (False, {0: run_pose(0), 6: P(run_pose(0.3), {'spine': (26, 0, 0)}, diamond(-45, -30)), 11: scoop,
+                             17: P(scoop, {'spine': (30, 0, 0), 'loc': (0, 0, -0.2)}, diamond(-30, -100)),
+                             24: P(run_pose(0.8), tuckR), 30: run_pose(1.0, True)})
+    # defender breaks up the pass: plant, leap, right arm rakes through the ball, land
+    A['Swat'] = (False, {0: run_pose(0.25), 5: P(CROUCH, {'loc': (0, 0, -0.16), 'upperarm_R': (-60, 10, 0), 'upperarm_L': (-40, -10, 0)}),
+                         10: P({'loc': (0, 0, 0.32), 'spine': (-10, 0, 12), 'chest': (0, 0, 10), 'neck': (-25, 0, 0), 'thigh_L': (-30, 0, 0), 'shin_L': (50, 0, 0),
+                                'thigh_R': (-5, 0, 0), 'shin_R': (25, 0, 0), 'foot_L': (30, 0, 0), 'foot_R': (30, 0, 0),
+                                'upperarm_R': (-172, 15, 0), 'forearm_R': (-8, 0, 0), 'upperarm_L': (-120, -20, 0), 'forearm_L': (-30, 0, 0)}),
+                         15: P({'loc': (0, 0, 0.18), 'spine': (20, 0, -25), 'chest': (10, 0, -15), 'neck': (-10, 0, 0), 'thigh_L': (-25, 0, 0), 'shin_L': (40, 0, 0),
+                                'thigh_R': (-15, 0, 0), 'shin_R': (35, 0, 0), 'upperarm_R': (-95, 0, -45), 'forearm_R': (-20, 0, 0),
+                                'upperarm_L': (-70, -30, 0), 'forearm_L': (-50, 0, 0)}),
+                         22: P(CROUCH, {'loc': (0, 0, -0.2), 'upperarm_R': (-30, 0, -20), 'forearm_R': (-50, 0, 0), 'upperarm_L': (-30, -10, 0)}),
+                         32: P(CROUCH, {'loc': (0, 0, -0.08), 'spine': (12, 0, 0), 'upperarm_R': (-150, 10, 0), 'forearm_R': (-60, 0, 0),
+                                        'upperarm_L': (-20, -15, 0), 'forearm_L': (-40, 0, 0)})})
+    # receiver after a drop or breakup: hands open, ball gone, hands to the facemask, head drops
+    hh = {'upperarm_L': (-150, -55, 0), 'upperarm_R': (-150, 55, 0), 'forearm_L': (-125, 0, 0), 'forearm_R': (-125, 0, 0),
+          'neck': (25, 0, 0), 'head': (10, 0, 0), 'spine': (14, 0, 0)}
+    A['DropReact'] = (False, {0: P(run_pose(0.5), diamond(-90, -40)), 6: P(run_pose(0.75), diamond(-110, -10), {'neck': (-20, 0, 0)}),
+                              14: P(rest, {'upperarm_L': (-40, -20, 0), 'upperarm_R': (-40, 20, 0), 'forearm_L': (-30, 0, 0), 'forearm_R': (-30, 0, 0), 'spine': (10, 0, 0)}),
+                              24: P(rest, hh), 34: P(rest, hh, {'spine': (20, 0, 8), 'neck': (30, 0, -10)}), 48: P(rest, hh, {'spine': (12, 0, -6)})})
     dive_air = {'hips': (75, 0, 0), 'loc': (0, -0.5, -0.2), 'upperarm_L': (-170, -8, 0), 'upperarm_R': (-170, 8, 0), 'forearm_L': (-5, 0, 0), 'forearm_R': (-5, 0, 0),
                 'thigh_L': (10, 0, 0), 'thigh_R': (25, 0, 0), 'shin_L': (30, 0, 0), 'shin_R': (50, 0, 0), 'neck': (-40, 0, 0)}
     A['Dive'] = (False, {0: run_pose(0), 6: P(CROUCH, {'spine': (35, 0, 0), 'upperarm_L': (-120, 0, 0), 'upperarm_R': (-120, 0, 0)}),

@@ -4,6 +4,14 @@ import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 export const YD = 0.9144;
 export const OU_GOAL_Z = 50 * YD;           // three +z = toward the OU end zone (blender -y)
+const PYLON_X = 24.4;
+const PROP_SPOTS: Record<string, [number, number, number]> = {   // three x, z, yaw
+  goalpost_home: [0, 60 * YD, Math.PI], goalpost_away: [0, -60 * YD, 0],
+  pylon_0: [-PYLON_X, 50 * YD, 0], pylon_1: [PYLON_X, 50 * YD, 0], pylon_2: [-PYLON_X, 60 * YD, 0], pylon_3: [PYLON_X, 60 * YD, 0],
+  pylon_4: [-PYLON_X, -50 * YD, 0], pylon_5: [PYLON_X, -50 * YD, 0], pylon_6: [-PYLON_X, -60 * YD, 0], pylon_7: [PYLON_X, -60 * YD, 0],
+  chains: [26, 0, Math.PI], down_marker: [-26, 0, 0], bench_texas: [-31.5, 0, 0], bench_ou: [31.5, 0, Math.PI],
+  smokey: [-27, 58 * YD, THREE.MathUtils.degToRad(-120)],
+};
 const INTERNAL_W = 960, INTERNAL_H = 540;
 
 const loader = new GLTFLoader();
@@ -88,6 +96,13 @@ export class World {
   props!: GLTF;
   football!: THREE.Object3D;
   fpArm!: THREE.Group;
+  fpBall: THREE.Object3D | null = null;
+  placeChains(losZ: number, firstDownZ: number) {
+    const c = this.propObjs.get('chains'), d = this.propObjs.get('down_marker');
+    if (c) c.position.z = firstDownZ - 10 * YD;
+    if (d) d.position.z = losZ;
+  }
+  propObjs = new Map<string, THREE.Object3D>();
   shake = 0;
   pixel = true;
   frame = 0;
@@ -164,7 +179,14 @@ export class World {
     for (const n of ['goalpost_home', 'goalpost_away', 'pylon_0', 'pylon_1', 'pylon_2', 'pylon_3', 'pylon_4', 'pylon_5', 'pylon_6', 'pylon_7',
       'chains', 'down_marker', 'bench_texas', 'bench_ou', 'smokey']) {
       const o = props.scene.getObjectByName(n);
-      if (o) this.scene.add(o.clone());
+      if (!o) continue;
+      const c = o.clone();
+      // blender (x, y, z) -> three (x, z, -y); goalposts sit on the end lines with the base behind
+      const at = PROP_SPOTS[n] ?? [0, 0, 0];
+      c.position.set(at[0], 0, at[1]);
+      c.rotation.set(0, at[2], 0);
+      this.propObjs.set(n, c);
+      this.scene.add(c);
     }
     this.football = ball.scene.getObjectByName('football')!;
     this.football.traverse(o => { (o as THREE.Mesh).castShadow = true; });
@@ -177,6 +199,7 @@ export class World {
     const inner = new THREE.Group();
     inner.add(arm.scene);
     inner.applyMatrix4(new THREE.Matrix4().multiplyMatrices(R, Cinv));
+    this.fpBall = arm.scene.getObjectByName('fp_ball') ?? null;
     this.fpArm = new THREE.Group();
     this.fpArm.add(inner);
     this.fpArm.position.set(0.25, -0.17, -0.7);
