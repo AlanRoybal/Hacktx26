@@ -42,15 +42,21 @@ def ribbons():
                               ('ribbon_hype', 'MAKE SOME NOISE   HOOK \'EM', ORANGE, WHITE)):
         img = Image.new('RGB', (1024, 64), bg)
         d = ImageDraw.Draw(img)
-        fit_text(d, (12, 6, 1012, 58), txt, BOLD, fg, 52)
+        if name == 'ribbon_calm':
+            rrr = Image.open(os.path.join(OUT, 'rrr_Allstate_Red_River_Rivalry_logo.png')).convert('RGBA').resize((60, 60), Image.LANCZOS)
+            fit_text(d, (80, 6, 944, 58), txt, BOLD, fg, 52)
+            img.paste(rrr, (10, 2), rrr); img.paste(rrr, (954, 2), rrr)
+        else:
+            fit_text(d, (12, 6, 1012, 58), txt, BOLD, fg, 52)
         img.save(os.path.join(OUT, name + '.png'))
 
 
 def jumbo():
     idle = Image.new('RGB', (1280, 720), BLACK)
     logo = Image.open(os.path.join(OUT, 'logo_texas_hd.png')).resize((768, 384), Image.LANCZOS)
-    idle.paste(logo, (256, 110), logo)
-    fit_text(ImageDraw.Draw(idle), (100, 520, 1180, 660), 'TEXAS LONGHORNS', BOLD, WHITE, 120)
+    rrr = Image.open(os.path.join(OUT, 'rrr_Allstate_Red_River_Rivalry_logo.png')).convert('RGBA').resize((440, 440), Image.LANCZOS)
+    idle.paste(rrr, (420, 40), rrr)
+    fit_text(ImageDraw.Draw(idle), (100, 520, 1180, 660), 'RED RIVER RIVALRY', BOLD, WHITE, 120)
     idle.save(os.path.join(OUT, 'jumbo_idle.png'))
     hype = Image.new('RGB', (1280, 720), ORANGE)
     d = ImageDraw.Draw(hype)

@@ -72,6 +72,8 @@ export class World {
   private jumboCanvas = document.createElement('canvas');
   private screenMat!: THREE.MeshBasicMaterial;
   private ribbonMats: THREE.MeshBasicMaterial[] = [];
+  private fairLights: THREE.MeshStandardMaterial[] = [];
+  private rrrLogo = (() => { const i = new Image(); i.src = 'textures/rrr_Allstate_Red_River_Rivalry_logo.png'; return i; })();
   private ribbonTex = { calm: loadTex('ribbon_calm.png', true), hype: loadTex('ribbon_hype.png', true) };
   private lampShow: THREE.MeshStandardMaterial[] = [];
   private lamp: THREE.MeshStandardMaterial[] = [];
@@ -113,10 +115,18 @@ export class World {
 
   async load(onProgress: (s: string) => void) {
     onProgress('stadium');
-    const [stadium, props, ball, arm, seats] = await Promise.all([
+    const [stadium, props, ball, arm, seats, fair] = await Promise.all([
       loadGLB('stadium'), loadGLB('props'), loadGLB('football'), loadGLB('fp_arm'),
-      fetch('models/crowd_seats.json').then(r => r.json())]);
+      fetch('models/crowd_seats.json').then(r => r.json()), loadGLB('fair')]);
     this.props = props;
+    fair.scene.traverse(o => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const mat = m.material as THREE.MeshStandardMaterial;
+      if (m.name === 'big_tex') { mat.fog = false; mat.emissive.copy(mat.color); mat.emissiveIntensity = 0.35; return; }   // floodlit at night
+      if (mat.emissiveIntensity > 0 && mat.emissive.getHex()) { mat.fog = false; mat.emissiveIntensity = 4; this.fairLights.push(mat); }
+    });
+    this.scene.add(fair.scene);
     stadium.scene.traverse(o => {
       const m = o as THREE.Mesh;
       if (!m.isMesh) return;
@@ -335,6 +345,7 @@ export class World {
       c.font = `900 ${size}px Oswald, Impact, sans-serif`;
       c.fillText(l, 320, 180 + (i - (lines.length - 1) / 2) * size * 1.05, 600);
     });
+    if (this.rrrLogo.complete && this.rrrLogo.naturalWidth) c.drawImage(this.rrrLogo, 8, 8, 72, 72);
     this.jumboGraphic.needsUpdate = true;
     this.jumboMode = 'graphic';
     this.screenMat.map = this.jumboGraphic;
@@ -348,6 +359,7 @@ export class World {
     this.mosaicU.value += (this.mosaicTarget - this.mosaicU.value) * 0.035;
     const peak = Math.max(tex, ou);
     const strobe = peak > 0.78 ? (Math.sin(t * 22) > 0 ? 1 : 0.15) : 1;
+    this.fairLights.forEach((m, i) => { m.emissiveIntensity = 3 + 2.5 * (0.5 + 0.5 * Math.sin(t * (2 + peak * 6) + i)); });
     const showCol = new THREE.Color(ou > tex ? '#C41E1E' : '#FF5A00');
     for (const m of this.lampShow) { m.emissive.copy(peak > 0.55 ? showCol : new THREE.Color('#FFF3DC')); m.emissiveIntensity = peak > 0.55 ? 8 * strobe : 6; }
     for (const m of this.lamp) m.emissiveIntensity = 6 + 6 * peak;
