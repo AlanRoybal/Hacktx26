@@ -3,7 +3,7 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { loadGLB, loadTex } from './world';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
-export type Team = 'tex' | 'ou';
+export type Team = 'tex' | 'ou' | 'ref' | 'coach';
 const OU_COLORS: Record<string, string> = {
   jersey: '#EDEAE2', pants: '#E8DFC0', helmet: '#841617', facemask: '#EDEAE2', socks: '#841617',
   gloves: '#841617', skin: '#C08A64', numbers: '#841617',
@@ -11,7 +11,8 @@ const OU_COLORS: Record<string, string> = {
 const BASE_NUMBER = 16;   // number baked into the GLB decal UVs (10x10 atlas)
 
 let gltf: GLTF;
-const teamMats: Record<Team, Map<string, THREE.Material>> = { tex: new Map(), ou: new Map() };
+const teamMats: Record<Team, Map<string, THREE.Material>> = { tex: new Map(), ou: new Map(), ref: new Map(), coach: new Map() };
+const HIDE_MESH = new Set(['helmet', 'facemask', 'helmet_logo']);
 
 export async function loadPlayerAsset() {
   gltf = await loadGLB('player');
@@ -26,8 +27,29 @@ export async function loadPlayerAsset() {
       if (OU_COLORS[mat.name]) c.color.set(OU_COLORS[mat.name]);
       if (mat.name === 'helmet_logo') { const t = loadTex('logo_ou_hd.png'); t.flipY = false; c.map = t; }
       teamMats.ou.set(mat.name, c);
+      // officials: black and white stripes, black pants; coach: burnt orange polo, khakis. Neither wears numbers.
+      for (const t of ['ref', 'coach'] as const) {
+        const m2 = mat.clone() as THREE.MeshStandardMaterial;
+        if (mat.name === 'jersey') {
+          if (t === 'ref') { m2.map = stripes(); m2.color.set('#ffffff'); } else { m2.map = null; m2.color.set('#BF5700'); }
+        }
+        if (mat.name === 'pants') { m2.map = null; m2.color.set(t === 'ref' ? '#151515' : '#B39A6E'); }
+        if (mat.name === 'socks') m2.color.set('#151515');
+        if (mat.name === 'gloves') m2.color.set(OU_COLORS.skin);
+        if (mat.name === 'numbers' || mat.name === 'name_plate') m2.visible = false;
+        teamMats[t].set(mat.name, m2);
+      }
     }
   });
+}
+
+function stripes() {
+  const cv = document.createElement('canvas'); cv.width = 64; cv.height = 8;
+  const c = cv.getContext('2d')!;
+  for (let x = 0; x < 64; x += 16) { c.fillStyle = '#EEEEEE'; c.fillRect(x, 0, 8, 8); c.fillStyle = '#111111'; c.fillRect(x + 8, 0, 8, 8); }
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 1); t.colorSpace = THREE.SRGBColorSpace; t.flipY = false;
+  return t;
 }
 
 export class Actor {
@@ -40,12 +62,15 @@ export class Actor {
   heading = 0;
   role = '';
   data: Record<string, any> = {};
+  bones: THREE.Object3D[] = [];
 
   constructor(public team: Team, public number: number, public name = '') {
     this.obj = SkeletonUtils.clone(gltf.scene);
     this.obj.traverse(o => {
       const m = o as THREE.SkinnedMesh;
+      if ((o as THREE.Bone).isBone) this.bones.push(o);
       if (!m.isMesh) return;
+      if ((team === 'ref' || team === 'coach') && HIDE_MESH.has(m.name)) { m.visible = false; return; }
       m.castShadow = true;
       m.frustumCulled = false;
       const swap = (mat: THREE.Material) => {
@@ -93,6 +118,9 @@ export class Actor {
     a.time = once ? 0 : Math.random() * a.getClip().duration;
     this.current = name;
   }
+
+  /** Only the jumbotron camera sees layer 2 (the first-person QB's own body). */
+  setLayer(l: number) { this.obj.traverse(o => o.layers.set(l)); }
 
   face(target: THREE.Vector3) { this.heading = Math.atan2(target.x - this.pos.x, target.z - this.pos.z); }
 

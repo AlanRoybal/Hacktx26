@@ -36,3 +36,10 @@ canvas#c { position: fixed; inset: 0; width: 100vw; height: 100vh; image-renderi
 #screen table { margin-top: 3vh; font-size: 2.4vh; border-collapse: collapse; } #screen td { padding: 4px 22px; text-align: left; } #screen td:last-child { color: #FF8A2A; text-align: right; }
 @keyframes blink { 50% { opacity: .35; } }
 #loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: #000; font-size: 22px; letter-spacing: .4em; color: #BF5700; }
+#scorebug .to { color: #FF8A2A; letter-spacing: 3px; font-size: 16px; }
+#screen .row { display: flex; gap: 6vw; align-items: flex-start; justify-content: center; }
+#screen .board { margin-top: 3vh; } #screen .board th { color: #FF8A2A; letter-spacing: .3em; padding-bottom: 6px; }
+#screen .board td { padding: 3px 14px; color: #f2e6d6; } #screen .board tr.me td { background: rgba(191,87,0,.45); color: #fff; }
+#screen .enter { margin-top: 3vh; } #screen .ini { font: 900 12vh Impact, sans-serif; letter-spacing: .25em; color: #f2e6d6; }
+#screen .ini span.sel { color: #FF8A2A; border-bottom: 6px solid #FF8A2A; }
+#screen p.still { animation: none; font-size: 1.8vh; }

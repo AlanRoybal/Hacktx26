@@ -76,7 +76,11 @@ export class World {
   // jumbotron: second camera into its own target, shown on the 'screen' mesh
   jumboCam = new THREE.PerspectiveCamera(30, 16 / 9, 0.5, 400);
   jumboRT = new THREE.WebGLRenderTarget(512, 288);
-  jumboMode: 'live' | 'graphic' = 'live';
+  jumboMode: 'live' | 'graphic' | 'replay' = 'live';
+  /** Swaps actors to a recorded frame for the jumbotron render, then puts them back. */
+  replayHook: { apply(): void; restore(): void } | null = null;
+  private replayTag!: THREE.Mesh;
+  flag!: THREE.Mesh;
   jumboGraphic!: THREE.CanvasTexture;
   private jumboCanvas = document.createElement('canvas');
   private screenMat!: THREE.MeshBasicMaterial;
@@ -175,6 +179,20 @@ export class World {
     this.jumboCanvas.width = 640; this.jumboCanvas.height = 360;
     this.jumboGraphic = new THREE.CanvasTexture(this.jumboCanvas);
     this.jumboGraphic.colorSpace = THREE.SRGBColorSpace;
+    const tc = document.createElement('canvas'); tc.width = 256; tc.height = 64;
+    const tx = tc.getContext('2d')!;
+    tx.fillStyle = '#BF5700'; tx.fillRect(0, 0, 256, 64); tx.fillStyle = '#fff'; tx.font = '900 46px Impact, sans-serif';
+    tx.textAlign = 'center'; tx.textBaseline = 'middle'; tx.fillText('REPLAY', 128, 34);
+    const tagTex = new THREE.CanvasTexture(tc); tagTex.colorSpace = THREE.SRGBColorSpace;
+    this.replayTag = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.04), new THREE.MeshBasicMaterial({ map: tagTex, depthTest: false, fog: false, toneMapped: false }));
+    this.replayTag.position.set(-0.2, 0.17, -1);
+    this.replayTag.renderOrder = 20; this.replayTag.layers.set(2); this.replayTag.visible = false;
+    this.jumboCam.layers.enable(2);
+    this.jumboCam.add(this.replayTag);
+    this.scene.add(this.jumboCam);
+    this.flag = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.03, 0.32), new THREE.MeshStandardMaterial({ color: '#F2C21B', emissive: '#4a3a00', roughness: 0.8 }));
+    this.flag.castShadow = true; this.flag.visible = false;
+    this.scene.add(this.flag);
     // props
     for (const n of ['goalpost_home', 'goalpost_away', 'pylon_0', 'pylon_1', 'pylon_2', 'pylon_3', 'pylon_4', 'pylon_5', 'pylon_6', 'pylon_7',
       'chains', 'down_marker', 'bench_texas', 'bench_ou', 'smokey']) {
@@ -242,13 +260,24 @@ export class World {
    * driven by the team's pulse uniform, a per-fan threshold, a jump and a wave front. */
   private buildCrowd(seats: number[][]) {
     const rnd = mulberry(7);
+    const base = seats.length;
+    const extra: number[][] = [];
+    for (const [team, x0] of [[0, -22], [1, 6]] as const)
+      for (let r = 0; r < 5; r++) for (let c = 0; c < 14; c++) extra.push([x0 + c * 1.15 + (r % 2) * 0.5, 56.8 + r * 0.95, 0, Math.PI, team]);
+    const bandIdx = extra.map((_, i) => base + i);
+    const cheerStart = base + extra.length;
+    for (const [team, x, yaw] of [[0, -26.6, Math.PI / 2], [1, 26.6, -Math.PI / 2]] as const)
+      for (let k = 0; k < 8; k++) extra.push([x, -27 - k * 2.3, 0, yaw, team]);
+    const cheerIdx = extra.slice(bandIdx.length).map((_, i) => cheerStart + i);
+    const all = seats.concat(extra);
     const signIdx: number[] = [], fanIdx: number[] = [], jerseyIdx: number[] = [], cowboyIdx: number[] = [];
-    seats.forEach((_, i) => { const r = rnd(); (r < 0.12 ? signIdx : r < 0.27 ? jerseyIdx : r < 0.37 ? cowboyIdx : fanIdx).push(i); });
+    seats.slice(0, base).forEach((_, i) => { const r = rnd(); (r < 0.12 ? signIdx : r < 0.27 ? jerseyIdx : r < 0.37 ? cowboyIdx : fanIdx).push(i); });
     const HATS = ['#C8A672', '#1A1A1A', '#EDE6D6', '#6B4A2B', '#D9C08F'].map(c => new THREE.Color(c));
     const JERSEY_NUMS = [[16, 16, 1, 8, 0, 3], [10, 10, 1, 4, 8, 2]];
     const teamCol = [new THREE.Color('#BF5700'), new THREE.Color('#841617')];
     const shirtCol = (team: number) => { const r = rnd(); return r < 0.72 ? teamCol[team] : r < 0.9 ? new THREE.Color('#E8E4DA') : new THREE.Color('#1A1A1A'); };
-    const build = (name: string, idx: number[]) => {
+    seats = all;
+    const build = (name: string, idx: number[], colorFn?: (team: number, k: number) => THREE.Color, hatFn?: (team: number) => THREE.Color) => {
       const tmpl = this.props.scene.getObjectByName(name)!;
       const meshes: THREE.Mesh[] = [];
       tmpl.traverse(o => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh); });
@@ -266,9 +295,9 @@ export class World {
           shirts.push(teamCol[team]);
         } else {
           cell.set([0.25 * Math.floor(rnd() * 4), -0.5 * team], k * 2);
-          shirts.push(shirtCol(team));
+          shirts.push(colorFn ? colorFn(team, k) : shirtCol(team));
         }
-        hats.push(HATS[Math.floor(rnd() * HATS.length)]);
+        hats.push(hatFn ? hatFn(team) : HATS[Math.floor(rnd() * HATS.length)]);
       });
       for (const m of meshes) {
         const g = m.geometry.clone();
@@ -317,7 +346,10 @@ export class World {
     build('crowd_sign', signIdx);
     build('crowd_jersey', jerseyIdx);
     build('crowd_cowboy', cowboyIdx);
-    this.buildMosaic(seats);
+    const white = new THREE.Color('#EDE9E0');
+    build('crowd_cowboy', bandIdx, team => teamCol[team], team => team ? new THREE.Color('#841617') : white);
+    build('crowd_unit', cheerIdx, (team, k) => (k % 2 ? white : teamCol[team]));
+    this.buildMosaic(seats.slice(0, base));
   }
 
   /** Card stunt: the lower end-zone section under the jumbotron holds up cards that form the Freetail Hackers logo. */
@@ -377,6 +409,7 @@ export class World {
     this.screenMat.map = this.jumboGraphic;
   }
   jumboLive() { this.jumboMode = 'live'; this.screenMat.map = this.jumboRT.texture; }
+  jumboReplay() { this.jumboMode = 'replay'; this.screenMat.map = this.jumboRT.texture; }
 
   /** Stadium pulse visuals. tex/ou are 0..1 crowd energy for each half. */
   setPulse(tex: number, ou: number, t: number) {
@@ -408,11 +441,15 @@ export class World {
   render(t: number) {
     this.frame++;
     this.renderer.info.reset();
-    if (this.jumboMode === 'live' && this.frame % 2 === 0) {
+    const replay = this.jumboMode === 'replay' && this.replayHook;
+    if ((this.jumboMode === 'live' || replay) && this.frame % 2 === 0) {
       const vis = this.fpArm.visible;
       this.fpArm.visible = false;
+      this.replayTag.visible = !!replay;
+      if (replay) this.replayHook!.apply();
       this.renderer.setRenderTarget(this.jumboRT);
       this.renderer.render(this.scene, this.jumboCam);
+      if (replay) this.replayHook!.restore();
       this.fpArm.visible = vis;
     }
     const sx = (Math.random() - 0.5) * this.shake, sy = (Math.random() - 0.5) * this.shake;

@@ -2,7 +2,7 @@
  * are offsets from the player's start; t in seconds after the snap. */
 export type OffPos = 'WR1' | 'WR2' | 'WR3' | 'TE' | 'RB' | 'LT' | 'LG' | 'C' | 'RG' | 'RT';
 export type DefPos = 'DE1' | 'DT1' | 'DT2' | 'DE2' | 'LB1' | 'LB2' | 'CB1' | 'CB2' | 'NB' | 'S1' | 'S2';
-export type Cover = { man?: OffPos; zone?: [number, number]; cushion?: number; lag?: number; blitz?: boolean };
+export type Cover = { man?: OffPos; zone?: [number, number]; cushion?: number; lag?: number; blitz?: boolean; rot?: { at: number; zone: [number, number] } };
 
 export interface Play {
   name: string;
@@ -84,3 +84,17 @@ export const PLAYS: Play[] = [
     sackTime: [3.6, 4.3], yac: { WR1: [2, 10], WR2: [2, 9], WR3: [1, 6], TE: [2, 8], RB: [1, 5] },
   },
 ];
+
+export type DefCall = 'MAN' | 'COVER 2' | 'COVER 3' | 'BLITZ' | 'ROBBER';
+/** Coverage for this snap. Zones are [x yards, depth yards] from the line. */
+export function makeCoverage(call: DefCall, base: Partial<Record<DefPos, Cover>>): Partial<Record<DefPos, Cover>> {
+  switch (call) {
+    case 'COVER 2': return { CB1: { zone: [-20, 4] }, CB2: { zone: [20, 4] }, NB: { zone: [-11, 8] }, LB1: { zone: [-4, 9] }, LB2: { zone: [5, 9] },
+      S1: { zone: [-12, 20] }, S2: { zone: [12, 20] } };
+    case 'COVER 3': return { CB1: { zone: [-18, 18] }, CB2: { zone: [18, 18] }, S2: { zone: [0, 22] }, S1: { zone: [-9, 9] }, NB: { zone: [-14, 6] },
+      LB1: { zone: [-4, 8] }, LB2: { zone: [5, 8] } };
+    case 'BLITZ': return { ...base, LB1: { blitz: true }, S1: { man: 'RB', cushion: 2, lag: 0.6 } };
+    case 'ROBBER': return { ...base, S1: { zone: [-9, 13], rot: { at: 0.5, zone: [0, 22] } }, S2: { zone: [9, 13], rot: { at: 0.5, zone: [5, 9] } } };
+    default: return base;
+  }
+}

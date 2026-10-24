@@ -1,4 +1,4 @@
-import type { Game, Hooks } from '../game/game';
+import type { Game, Hooks, BoardRow } from '../game/game';
 import { PLAYS, OFF_SPOT, type OffPos } from '../game/plays';
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -17,7 +17,13 @@ function routeSvg(i: number) {
   return s + '</svg>';
 }
 
-export function makeHud(buzz: (ms: number, amp?: number) => void): Hooks {
+function boardHtml(rows: BoardRow[], me: number, n = 5) {
+  if (!rows.length) return '';
+  return `<table class="board"><tr><th colspan="4">LEADERBOARD</th></tr>` + rows.slice(0, n).map((r, i) =>
+    `<tr class="${i === me ? 'me' : ''}"><td>${i + 1}</td><td>${r.n}</td><td>${r.r.toFixed(1)}</td><td>${r.yds} YDS${r.win ? ' · W' : ''}</td></tr>`).join('') + '</table>';
+}
+
+export function makeHud(buzz: (ms: number, amp?: number) => void, rumble: Hooks['rumble']): Hooks {
   $('plays').innerHTML = PLAYS.map((p, i) => `<div class="card" id="card${i}"><h3>${p.name}<span class="k">${i + 1}</span></h3><p>${p.desc}</p>${routeSvg(i)}</div>`).join('');
   return {
     banner(text, sub = '', color = '#BF5700') {
@@ -34,8 +40,10 @@ export function makeHud(buzz: (ms: number, amp?: number) => void): Hooks {
       $('sClock').textContent = `${Math.floor(c / 60)}:${String(c % 60).padStart(2, '0')}`;
       $('sDown').textContent = `${ORD[Math.min(4, g.down)]} & ${g.toGo >= g.ballOn ? 'GOAL' : g.toGo}`;
       $('sSpot').textContent = g.ballOn > 50 ? `TEX ${100 - g.ballOn}` : `OU ${g.ballOn}`;
+      $('sTO').textContent = '●'.repeat(g.timeouts) + '○'.repeat(3 - g.timeouts);
     },
     buzz,
+    rumble,
     statCard(lines) {
       $('stat').innerHTML = lines.join('<br>');
       $('stat').classList.add('on');
@@ -47,13 +55,19 @@ export function makeHud(buzz: (ms: number, amp?: number) => void): Hooks {
       $('scorebug').style.display = kind === 'title' ? 'none' : 'flex';
       if (kind === 'none') { el.classList.remove('on'); return; }
       if (kind === 'title') el.innerHTML = `<h1>RED RIVER</h1><h2>TEXAS VS OKLAHOMA · COTTON BOWL · DALLAS</h2>
-        <p>HOLD ZR (OR CLICK) TO TAKE THE FIELD</p>`;
+        <p>HOLD ZR (OR CLICK) TO TAKE THE FIELD</p>${boardHtml(g.board(), -1)}`;
       else {
         const s = g.stats;
+        const card = `<table><tr><td>COMP / ATT</td><td>${s.comp} / ${s.att}</td></tr><tr><td>PASS YDS</td><td>${s.yds}</td></tr>
+          <tr><td>TD / INT</td><td>${s.td} / ${s.int}</td></tr><tr><td>SACKS</td><td>${s.sacks}</td></tr><tr><td>LONGEST</td><td>${s.long} YDS</td></tr>
+          <tr><td>FASTEST THROW</td><td>${s.fast} MPH</td></tr><tr><td>BEST SPIRAL</td><td>${g.bestSpiralGrade()}</td></tr><tr><td>QB RATING</td><td>${g.rating()}</td></tr></table>`;
+        const e = g.entry;
+        const right = e
+          ? `<div class="enter"><h2>ENTER INITIALS</h2><div class="ini">${e.letters.map((l, i) => `<span class="${i === e.idx ? 'sel' : ''}">${String.fromCharCode(65 + l)}</span>`).join('')}</div>
+             <p class="still">STICK UP / DOWN · ZR TO LOCK IN (OR TYPE)</p></div>`
+          : boardHtml(g.board(), g.savedRank, 10);
         el.innerHTML = `<div class="big">${g.win ? 'TEXAS WINS' : 'OU HOLDS ON'}</div><h2>${g.win ? `${g.tex} - ${g.ou}` : g.overReason}</h2>
-          <table><tr><td>COMP / ATT</td><td>${s.comp} / ${s.att}</td></tr><tr><td>PASS YDS</td><td>${s.yds}</td></tr>
-          <tr><td>TD / INT</td><td>${s.td} / ${s.int}</td></tr><tr><td>SACKS</td><td>${s.sacks}</td></tr><tr><td>QB RATING</td><td>${g.rating()}</td></tr></table>
-          <p>HOLD ZR (OR CLICK) TO PLAY AGAIN</p>`;
+          <div class="row">${card}${right}</div>${e ? '' : '<p>HOLD ZR (OR CLICK) TO PLAY AGAIN</p>'}`;
       }
       el.classList.add('on');
     },

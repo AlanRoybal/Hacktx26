@@ -454,6 +454,36 @@ def actions():
                     'thigh_L': (-35 if m > 0 else -5, 0, 0), 'shin_L': (50 if m > 0 else 10, 0, 0), 'thigh_R': (-5 if m > 0 else -35, 0, 0),
                     'shin_R': (10 if m > 0 else 50, 0, 0), 'loc': (0, 0, -0.05), 'neck': (-10, 0, -12 * m)}
     A['SackDance'] = (True, {0: sd(1), 12: sd(-1), 24: sd(1)})
+    # QB seen on the jumbotron: ball held high at the chest, then a full throwing motion
+    qbset = P(rest, {'upperarm_R': (-38, 0, 18), 'forearm_R': (-112, 0, 0), 'upperarm_L': (-35, 0, -18), 'forearm_L': (-108, 0, 0),
+                     'thigh_L': (-14, 0, -4), 'thigh_R': (-14, 0, 4), 'shin_L': (22, 0, 0), 'shin_R': (22, 0, 0), 'loc': (0, 0, -0.04), 'spine': (8, 0, 0)})
+    A['QBSet'] = (True, {0: qbset, 20: P(qbset, {'loc': (0, 0, -0.05), 'neck': (-4, 0, 6)}), 40: qbset})
+    A['Throw'] = (False, {0: qbset, 5: P(qbset, {'upperarm_R': (-150, 40, 0), 'forearm_R': (-115, 0, 0), 'upperarm_L': (-80, -10, 0), 'forearm_L': (-30, 0, 0),
+                                                 'spine': (-6, 0, 22), 'chest': (0, 0, 14), 'thigh_L': (-30, 0, 0), 'shin_L': (25, 0, 0)}),
+                          9: P(qbset, {'upperarm_R': (-125, -5, 0), 'forearm_R': (-25, 0, 0), 'upperarm_L': (-25, -25, 0), 'forearm_L': (-60, 0, 0),
+                                       'spine': (14, 0, -12), 'chest': (6, 0, -12), 'thigh_L': (-25, 0, 0), 'shin_L': (15, 0, 0)}),
+                          16: P(qbset, {'upperarm_R': (-35, -40, 0), 'forearm_R': (-20, 0, 0), 'upperarm_L': (-15, -20, 0), 'forearm_L': (-50, 0, 0),
+                                        'spine': (28, 0, -22), 'chest': (8, 0, -14), 'thigh_R': (-5, 0, 0), 'thigh_L': (-30, 0, 0), 'shin_L': (30, 0, 0)}),
+                          26: P(rest, {'spine': (10, 0, -6)})})
+    # officials' signals
+    up = {'upperarm_L': (-178, -6, 0), 'upperarm_R': (-178, 6, 0), 'forearm_L': (0, 0, 0), 'forearm_R': (0, 0, 0), 'hand_L': (0, 0, 0), 'hand_R': (0, 0, 0)}
+    A['RefTD'] = (False, {0: rest, 8: P(rest, up, {'loc': (0, 0, 0.02)}), 30: P(rest, up), 40: P(rest, up, {'neck': (-5, 0, 0)})})
+    wo = lambda k: {'upperarm_L': (-88, -62 + 85 * k, 0), 'upperarm_R': (-88, 62 - 85 * k, 0), 'forearm_L': (-5, 0, 0), 'forearm_R': (-5, 0, 0)}
+    A['RefIncomplete'] = (True, {0: P(rest, wo(0)), 8: P(rest, wo(1)), 16: P(rest, wo(0)), 24: P(rest, wo(1)), 32: P(rest, wo(0))})
+    point = {'upperarm_R': (-92, 0, 0), 'forearm_R': (-2, 0, 0), 'hand_R': (0, 0, 0), 'chest': (0, 0, 12), 'neck': (-4, 0, -10)}
+    A['RefFirstDown'] = (False, {0: rest, 8: P(rest, point), 34: P(rest, point, {'upperarm_R': (-96, 0, 0)})})
+    A['RefFlag'] = (False, {0: rest, 6: P(rest, {'upperarm_R': (-165, 20, 0), 'forearm_R': (-70, 0, 0), 'spine': (-6, 0, 10)}),
+                            11: P(rest, {'upperarm_R': (-70, 0, 0), 'forearm_R': (-8, 0, 0), 'spine': (10, 0, -10), 'thigh_L': (-20, 0, 0), 'shin_L': (20, 0, 0)}),
+                            20: P(rest, {'upperarm_R': (-30, 10, 0), 'forearm_R': (-20, 0, 0)}), 28: rest})
+    push = lambda k: {'upperarm_L': (-80 + 20 * k, -10, 0), 'upperarm_R': (-80 + 20 * k, 10, 0), 'forearm_L': (-10 - 80 * k, 0, 0), 'forearm_R': (-10 - 80 * k, 0, 0),
+                      'hand_L': (40, 0, 0), 'hand_R': (40, 0, 0)}
+    A['RefPI'] = (True, {0: P(rest, push(1)), 8: P(rest, push(0)), 16: P(rest, push(1)), 24: P(rest, push(0)), 32: P(rest, push(1))})
+    # ball carrier going down forward (scramble tackle seen from the jumbotron)
+    A['DiveTackled'] = (False, {0: run_pose(0.25, True), 8: P(run_pose(0.5, True), {'spine': (35, 0, 0), 'loc': (0, -0.2, -0.2)}),
+                                16: P({'hips': (70, 0, 0), 'loc': (0, -0.7, -0.55), 'neck': (-45, 0, 0), 'upperarm_R': (-28, 0, 22), 'forearm_R': (-118, 0, 0),
+                                       'upperarm_L': (-120, -10, 0), 'thigh_L': (15, 0, 0), 'thigh_R': (30, 0, 0), 'shin_L': (30, 0, 0), 'shin_R': (50, 0, 0)}),
+                                26: P({'hips': (88, 0, 0), 'loc': (0, -1.0, -0.84), 'neck': (-55, 0, 0), 'upperarm_R': (-28, 0, 22), 'forearm_R': (-118, 0, 0),
+                                       'upperarm_L': (-150, -20, 0), 'thigh_L': (5, 0, 0), 'thigh_R': (15, 0, 0), 'shin_L': (20, 0, 0), 'shin_R': (35, 0, 0)})})
     return A
 
 

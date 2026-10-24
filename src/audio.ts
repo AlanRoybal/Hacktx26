@@ -3,6 +3,11 @@ const CLIPS = ['crowd_bed', 'crowd_roar', 'crowd_ooh', 'crowd_boo', 'texas_fight
   'boomer_sooner', 'cannon', 'whistle', 'hit_pads', 'whoosh', 'catch_thud', 'heartbeat', 'horn', 'cadence',
   'grunt', 'grunt2', 'helmet_hit', 'thud', 'ear_ring'] as const;
 export type Clip = typeof CLIPS[number];
+// broadcast calls: public/audio/call_<kind>_<i>.ogg
+const CALLS = { td: 3, int: 2, sack: 2, big: 2, catch: 2, first: 2, drop: 2, pbu: 2, inc: 1, flag: 1, fourth: 2, final: 1,
+  scramble: 1, timeout: 1, spike: 1, intro: 1, win: 1, lose: 1 };
+export type Call = keyof typeof CALLS;
+const CALL_FILES = Object.entries(CALLS).flatMap(([k, n]) => Array.from({ length: n }, (_, i) => `call_${k}_${i}`));
 
 export class Audio {
   ctx = new AudioContext({ latencyHint: 'interactive' });
@@ -13,6 +18,9 @@ export class Audio {
   sfx = this.ctx.createGain();
   crowdLP = this.ctx.createBiquadFilter();
   heart = this.ctx.createGain();
+  voice = this.ctx.createGain();
+  private voiceSrc: AudioBufferSourceNode | null = null;
+  private voiceUntil = 0;
   private musicSrc: { src: AudioBufferSourceNode; g: GainNode } | null = null;
   private musicName = '';
   private started = false;
@@ -26,13 +34,15 @@ export class Audio {
     this.music.connect(this.master);
     this.sfx.connect(this.master);
     this.heart.connect(this.master);
+    this.voice.connect(this.master);
+    this.voice.gain.value = 1.35;
     this.heart.gain.value = 0;
     this.master.connect(this.ctx.destination);
     this.music.gain.value = 0.55;
   }
 
   async load() {
-    await Promise.all(CLIPS.map(async n => {
+    await Promise.all([...CLIPS, ...CALL_FILES].map(async n => {
       try {
         const r = await fetch(`audio/${n}.ogg`);
         if (r.ok) this.buf.set(n, await this.ctx.decodeAudioData(await r.arrayBuffer()));
@@ -94,6 +104,24 @@ export class Audio {
     g.gain.linearRampToValueAtTime(0, t + fade);
     src.stop(t + fade + 0.05);
     this.musicSrc = null; this.musicName = '';
+  }
+
+  /** Play-by-play line. Lower-priority calls wait their turn instead of talking over the current one. */
+  call(kind: Call, priority = false, delay = 0.15) {
+    if (!this.started) return;
+    const b = this.buf.get(`call_${kind}_${Math.floor(Math.random() * CALLS[kind])}`);
+    if (!b) return;
+    const now = this.ctx.currentTime;
+    if (now < this.voiceUntil && !priority) return;
+    try { this.voiceSrc?.stop(); } catch { /* already done */ }
+    const src = this.ctx.createBufferSource();
+    src.buffer = b;
+    src.connect(this.voice);
+    src.start(now + delay);
+    this.voiceSrc = src;
+    this.voiceUntil = now + delay + b.duration;
+    this.music.gain.setTargetAtTime(0.18, now, 0.15);
+    this.music.gain.setTargetAtTime(0.5, now + delay + b.duration, 0.6);
   }
 
   duck(on: boolean) { this.music.gain.setTargetAtTime(on ? 0.22 : 0.55, this.ctx.currentTime, 0.3); }

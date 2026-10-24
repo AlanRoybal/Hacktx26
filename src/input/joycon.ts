@@ -23,6 +23,8 @@ export class JoyCon {
   battery = 0;
   stick = [0, 0];
   shoulder = false;
+  /** face = A (R) / down (L), menu = plus (R) / minus (L), stickClick = stick press */
+  btn = { face: false, menu: false, stickClick: false };
   private counter = 0;
   private tPrev = 0;
   private calib: number[][] = [];
@@ -59,9 +61,24 @@ export class JoyCon {
     this.dev.sendReport(0x10, d).catch(() => {});
   }
 
+  private patT = 0;
   buzz(ms: number, amp = 0.8, f = 160) {
+    clearTimeout(this.patT);
     this.rumble(f, f * 2, amp);
-    setTimeout(() => this.rumble(160, 320, 0), ms);
+    this.patT = window.setTimeout(() => this.rumble(160, 320, 0), ms);
+  }
+
+  /** Sequence of [ms, amp, freq] steps (amp 0 = gap). */
+  pattern(steps: [number, number, number][]) {
+    clearTimeout(this.patT);
+    let i = 0;
+    const next = () => {
+      if (i >= steps.length) { this.rumble(160, 320, 0); return; }
+      const [ms, amp, f] = steps[i++];
+      this.rumble(f, f * 2, amp);
+      this.patT = window.setTimeout(next, ms);
+    };
+    next();
   }
 
   private onReport(e: HIDInputReportEvent) {
@@ -74,6 +91,10 @@ export class JoyCon {
     const right = d.getUint8(2), left = d.getUint8(4);
     const trig = this.isLeft ? (left & 0x80) !== 0 : (right & 0x80) !== 0;
     this.shoulder = this.isLeft ? (left & 0x40) !== 0 : (right & 0x40) !== 0;
+    const shared = d.getUint8(3);
+    this.btn = this.isLeft
+      ? { face: (left & 0x01) !== 0, menu: (shared & 0x01) !== 0, stickClick: (shared & 0x08) !== 0 }
+      : { face: (right & 0x08) !== 0, menu: (shared & 0x02) !== 0, stickClick: (shared & 0x04) !== 0 };
     const so = this.isLeft ? 5 : 8;
     const sx = d.getUint8(so) | ((d.getUint8(so + 1) & 0x0f) << 8);
     const sy = (d.getUint8(so + 1) >> 4) | (d.getUint8(so + 2) << 4);
@@ -229,4 +250,9 @@ export class JoyConInput {
   }
 
   buzz(ms: number, amp = 0.8) { this.active?.buzz(ms, amp); }
+  /** Rumble pattern on the throwing Joy-Con, or on every live Joy-Con for big moments. */
+  pattern(steps: [number, number, number][], both = false) {
+    const now = performance.now();
+    for (const p of both ? this.pads.values() : this.active ? [this.active] : []) if (now - p.lastReport < 300) p.pattern(steps);
+  }
 }
