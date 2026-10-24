@@ -58,7 +58,7 @@ def materials(c, sfx=''):
     return M
 
 
-TORSO = [(1.00, .152, .112), (1.12, .158, .116), (1.24, .185, .126), (1.36, .238, .145), (1.46, .272, .156), (1.53, .25, .146)]
+TORSO = [(1.00, .152, .112), (1.12, .158, .116), (1.24, .185, .126), (1.36, .228, .14), (1.46, .25, .148), (1.53, .232, .14)]
 
 
 def torso_r(z):
@@ -142,13 +142,13 @@ def build_body(M, number, sfx=''):
         parts.append(ob)
         return ob
 
-    pants = [(0.0, .172, .128), (0.3, .186, .136), (0.7, .172, .124), (1.0, .156, .114)]
-    add(lib.loft('pelvis', (0, 0, 0.86), (0, 0, 1.08), pants, 14, M['pants']), torso_w)
-    add(lib.loft('belt', (0, 0, 1.02), (0, 0, 1.05), [(0, .169, .121), (1, .169, .121)], 14, M['sole']), torso_w)
+    pants = [(0.0, .12, .095), (0.2, .168, .124), (0.45, .186, .136), (0.78, .172, .124), (1.0, .156, .114)]
+    add(lib.loft('pelvis', (0, 0, 0.80), (0, 0, 1.08), pants, 14, M['pants']), torso_w)
+    add(lib.loft('belt', (0, 0, 1.02), (0, 0, 1.05), [(0, .18, .132), (1, .178, .13)], 14, M['sole']), torso_w)
     jt = [((z - 1.0) / 0.53, a, b) for z, a, b in TORSO]
     add(lib.loft('torso', (0, 0, 1.0), (0, 0, 1.53), jt, 14, M['jersey']), torso_w)
     add(lib.loft('neckroll', (0, 0, 1.53), (0, 0, 1.6), [(0, .118, .106), (0.5, .108, .098), (1, .088, .082)], 14, M['jersey']), bone='chest')
-    pads = lib.sphere('pads', 1.0, (0, 0.005, 1.485), 28, 14, M['jersey'], scale=(0.33, 0.19, 0.12))
+    pads = lib.sphere('pads', 1.0, (0, 0.005, 1.485), 28, 14, M['jersey'], scale=(0.30, 0.172, 0.1))
     lib.apply(pads)
     for v in pads.data.vertices:   # flat-topped plate with a squared front edge instead of a dome
         c = v.co
@@ -157,25 +157,22 @@ def build_body(M, number, sfx=''):
         c.y = 0.005 + (c.y - 0.005) * (1.0 + 0.18 * min(1.0, abs(c.x) / 0.25))
     add(lib.smooth(pads), bone='chest')
     for s, x in (('L', 1), ('R', -1)):
-        ep = lib.sphere(f'epaulet_{s}', 1.0, (0.262 * x, 0.0, 1.52), 18, 9, M['jersey'], scale=(0.125, 0.162, 0.058))
+        ep = lib.sphere(f'epaulet_{s}', 1.0, (0.245 * x, 0.0, 1.51), 18, 9, M['jersey'], scale=(0.105, 0.145, 0.045))
         lib.apply(ep)
         for v in ep.data.vertices:   # cap curls down over the deltoid
-            d = (v.co.x * x - 0.262) / 0.125
+            d = (v.co.x * x - 0.245) / 0.105
             if d > 0:
                 v.co.z -= 0.05 * d * d
         add(lib.smooth(ep), bone='chest')
         _, sh, el, _ = B[f'upperarm_{s}']
         _, _, wr, _ = B[f'forearm_{s}']
         _, _, ht, _ = B[f'hand_{s}']
-        sl = lib.loft(f'sleeve_{s}', sh, el, [(0.0, 0.106, 0.112), (0.25, 0.103, 0.106), (0.42, 0.092, 0.095)], 10, M['jersey'])
+        sl = lib.loft(f'sleeve_{s}', sh, el, [(0.0, 0.0954, 0.1008), (0.25, 0.0927, 0.0954), (0.42, 0.0828, 0.0855)], 10, M['jersey'])
         add(limb_w(sl, f'upperarm_{s}'))
-        ua = lib.loft(f'upperarm_{s}', sh, el, [(0.0, 0.082, 0.089), (0.35, 0.090, 0.096), (0.62, 0.080, 0.084), (0.88, 0.064, 0.066), (1.0, 0.060, 0.063)], 14, M['skin'])
+        ua = lib.loft(f'upperarm_{s}', sh, el, [(0.0, 0.0722, 0.0783), (0.35, 0.0792, 0.0845), (0.62, 0.0704, 0.0739), (0.88, 0.0563, 0.0581), (1.0, 0.0528, 0.0554)], 14, M['skin'])
         add(limb_w(ua, f'upperarm_{s}', child=f'forearm_{s}'))
-        fa = lib.loft(f'forearm_{s}', el, wr, [(0.0, 0.058, 0.061), (0.2, 0.069, 0.074), (0.45, 0.064, 0.067), (0.8, 0.046, 0.043), (1.0, 0.041, 0.037)], 14, M['skin'])
+        fa = lib.loft(f'forearm_{s}', el, wr, [(0.0, 0.0534, 0.0561), (0.2, 0.0635, 0.0681), (0.45, 0.0589, 0.0616), (0.8, 0.0423, 0.0396), (1.0, 0.0377, 0.034)], 14, M['skin'])
         add(limb_w(fa, f'forearm_{s}', parent=f'upperarm_{s}'))
-        eb = lib.sphere(f'elbow_{s}', 1.0, el, 12, 8, M['skin'], scale=(0.06, 0.062, 0.06))
-        lib.apply(eb)
-        add(lib.smooth(eb), fn=lambda i, co, s=s: {f'upperarm_{s}': 0.5, f'forearm_{s}': 0.5})
         tp = lib.loft(f'tape_{s}', el, wr, [(0.78, 0.052, 0.050), (1.0, 0.046, 0.044)], 10, M['tape'])
         add(limb_w(tp, f'forearm_{s}'))
         hd = lib.loft(f'glove_{s}', wr, ht, [(0.0, .03, .04), (0.45, .028, .05), (0.8, .022, .046), (1.0, .015, .03)], 8, M['gloves'])
@@ -185,16 +182,13 @@ def build_body(M, number, sfx=''):
         add(limb_w(tb, f'hand_{s}'))
         _, hp, kn, _ = B[f'thigh_{s}']
         _, _, an, _ = B[f'shin_{s}']
-        tg = lib.loft(f'thigh_{s}', hp, kn, [(0.0, 0.126, 0.138), (0.3, 0.125, 0.138), (0.6, 0.108, 0.116), (0.85, 0.089, 0.095), (1.0, 0.079, 0.084)], 14, M['pants'])
+        tg = lib.loft(f'thigh_{s}', hp, kn, [(0.0, 0.1187, 0.1299), (0.3, 0.1177, 0.1299), (0.6, 0.1017, 0.1092), (0.85, 0.0838, 0.0895), (1.0, 0.0744, 0.0791)], 14, M['pants'])
         add(limb_w(tg, f'thigh_{s}', parent='hips', child=f'shin_{s}', t0=0.12, t1=0.9))
-        kp = lib.loft(f'kneepad_{s}', hp, kn, [(0.86, 0.08, 0.086, 0, 0.006), (0.98, 0.082, 0.09, 0, 0.009), (1.06, 0.077, 0.083, 0, 0.006)], 10, M['pants'])
+        kp = lib.loft(f'kneepad_{s}', hp, kn, [(0.86, 0.072, 0.0774, 0, 0.006), (0.98, 0.0738, 0.081, 0, 0.009), (1.06, 0.0693, 0.0747, 0, 0.006)], 10, M['pants'])
         add(limb_w(kp, f'thigh_{s}', child=f'shin_{s}', t1=0.95))
-        kb = lib.sphere(f'knee_{s}', 1.0, kn, 12, 8, M['pants'], scale=(0.08, 0.084, 0.078))
-        lib.apply(kb)
-        add(lib.smooth(kb), fn=lambda i, co, s=s: {f'thigh_{s}': 0.5, f'shin_{s}': 0.5})
-        sp = lib.loft(f'shin_pants_{s}', kn, an, [(0.0, 0.079, 0.084), (0.17, 0.073, 0.079)], 10, M['pants'])
+        sp = lib.loft(f'shin_pants_{s}', kn, an, [(0.0, 0.0727, 0.0773), (0.17, 0.0672, 0.0727)], 10, M['pants'])
         add(limb_w(sp, f'shin_{s}', parent=f'thigh_{s}', t0=0.1))
-        sk = lib.loft(f'sock_{s}', kn, an, [(0.12, 0.067, 0.072), (0.32, 0.074, 0.087, 0, -0.014), (0.55, 0.065, 0.074, 0, -0.008), (0.82, 0.047, 0.050), (1.0, 0.040, 0.045)], 14, M['socks'])
+        sk = lib.loft(f'sock_{s}', kn, an, [(0.12, 0.063, 0.0677), (0.32, 0.0696, 0.0818, 0, -0.014), (0.55, 0.0611, 0.0696, 0, -0.008), (0.82, 0.0442, 0.047), (1.0, 0.0376, 0.0423)], 14, M['socks'])
         add(limb_w(sk, f'shin_{s}'))
         hx = 0.12 * x
         cl = lib.loft(f'cleat_{s}', (hx, 0.075, 0.07), (hx, -0.175, 0.045),
@@ -353,8 +347,12 @@ def P(*dicts):
 
 def actions():
     A = {}
-    A['Idle'] = (True, {0: {'chest': (0, 0, 0), 'upperarm_L': (0, -4, 0), 'upperarm_R': (0, 4, 0), 'forearm_L': (-10, 0, 0), 'forearm_R': (-10, 0, 0)},
-                        30: {'chest': (-2, 0, 0), 'neck': (2, 0, 0), 'upperarm_L': (0, -6, 0), 'upperarm_R': (0, 6, 0), 'forearm_L': (-14, 0, 0), 'forearm_R': (-14, 0, 0), 'loc': (0, 0, 0.005)}})
+    rest = {'hips': (0, 0, 4), 'spine': (3, 0, -2), 'chest': (0, 0, -2), 'neck': (-3, 0, 2), 'loc': (0.015, 0, -0.012),
+            'upperarm_L': (6, -11, 0), 'upperarm_R': (2, 9, 0), 'forearm_L': (-24, 0, 0), 'forearm_R': (-18, 0, 0),
+            'hand_L': (-8, 0, 0), 'hand_R': (-6, 0, 0),
+            'thigh_L': (-4, 0, -3), 'shin_L': (6, 0, 0), 'thigh_R': (-9, 0, 4), 'shin_R': (14, 0, 0), 'foot_R': (-5, 0, 0)}
+    A['Idle'] = (True, {0: rest, 30: P(rest, {'chest': (-2, 0, -1), 'neck': (-1, 0, 3), 'upperarm_L': (6, -13, 0), 'upperarm_R': (2, 11, 0),
+                                              'forearm_L': (-27, 0, 0), 'forearm_R': (-21, 0, 0), 'loc': (0.015, 0, -0.008)})})
     A['Idle'][1][60] = A['Idle'][1][0]
     stance = {'loc': (0, 0, -0.42), 'thigh_L': (-95, 0, -10), 'thigh_R': (-75, 0, 10), 'shin_L': (115, 0, 0), 'shin_R': (110, 0, 0),
               'foot_L': (-30, 0, 0), 'foot_R': (-30, 0, 0), 'spine': (55, 0, 0), 'chest': (15, 0, 0), 'neck': (-55, 0, 0), 'head': (-10, 0, 0),
@@ -439,13 +437,151 @@ def make_actions(rig, sfx=''):
     return made
 
 
+ARM_PARTS = {'sleeve', 'upperarm', 'forearm', 'tape', 'glove', 'thumb'}
+SHELL = {'torso': (0.011, 6500), 'arm': (0.0075, 2300), 'leg': (0.0095, 2700)}   # voxel size, target tris
+
+
+def g3(co, c, r):
+    return math.exp(-sum(((co[i] - c[i]) / r[i]) ** 2 for i in range(3)))
+
+
+def sculpt(kind, co):
+    """Displacement along the normal (m): muscle masses under the skin/uniform and cloth folds. Blender: -Y is front."""
+    s = 1 if co.x > 0 else -1
+    x = co.x * s
+    d = 0.0
+    if kind == 'arm':
+        d += 0.0060 * g3((x, co.y, co.z), (0.295, -0.045, 1.30), (0.05, 0.035, 0.08))   # biceps
+        d += 0.0050 * g3((x, co.y, co.z), (0.29, 0.05, 1.33), (0.05, 0.035, 0.09))      # triceps
+        d += 0.0040 * g3((x, co.y, co.z), (0.335, -0.02, 1.09), (0.035, 0.04, 0.06))    # forearm flexors
+        d -= 0.0020 * g3((x, co.y, co.z), (0.31, -0.06, 1.17), (0.03, 0.03, 0.03))      # elbow pit
+    elif kind == 'leg':
+        d += 0.0060 * g3((x, co.y, co.z), (0.115, -0.065, 0.78), (0.055, 0.05, 0.14))   # rectus femoris
+        d += 0.0060 * g3((x, co.y, co.z), (0.075, -0.05, 0.61), (0.04, 0.04, 0.05))     # vastus medialis teardrop
+        d += 0.0050 * g3((x, co.y, co.z), (0.17, -0.01, 0.76), (0.04, 0.06, 0.12))      # vastus lateralis
+        d += 0.0040 * g3((x, co.y, co.z), (0.115, 0.065, 0.76), (0.06, 0.05, 0.13))     # hamstrings
+        d += 0.0070 * g3((x, co.y, co.z), (0.125, 0.055, 0.38), (0.05, 0.04, 0.08))     # calf
+        d += 0.0018 * math.sin(co.z * 2 * math.pi / 0.028) * g3((x, co.y, co.z), (0.12, 0.07, 0.56), (0.06, 0.04, 0.04))   # folds behind the knee
+        d += 0.0015 * math.sin((co.z + 0.6 * x) * 2 * math.pi / 0.04) * g3((x, co.y, co.z), (0.1, -0.1, 0.9), (0.06, 0.05, 0.06))   # hip crease
+    else:
+        d += 0.0060 * g3((x, co.y, co.z), (0.08, 0.13, 0.91), (0.08, 0.06, 0.08))       # glutes
+        d += 0.0030 * g3((x, co.y, co.z), (0.08, -0.13, 1.36), (0.08, 0.04, 0.06))      # pecs under the jersey
+        side = min(1.0, max(0.0, (x - 0.1) / 0.06))
+        d += 0.0015 * side * math.sin((co.z + 0.3 * co.y) * 2 * math.pi / 0.035) * g3((x, co.y, co.z), (0.15, 0, 1.13), (0.1, 0.2, 0.08))   # tuck folds
+    return d
+
+
+def unify(objs, name, voxel, target, kind):
+    """Fuse overlapping primitives into one seamless voxel-remeshed surface, sculpt it, then carry over
+    materials (nearest source face) and skin weights (inverse-distance from the nearest source face)."""
+    from mathutils.bvhtree import BVHTree
+    src = lib.join(objs, name + '_src')
+    sh = src.copy()
+    sh.data = src.data.copy()
+    sh.name = name
+    bpy.context.scene.collection.objects.link(sh)
+    for o in sh.vertex_groups[:]:
+        sh.vertex_groups.remove(o)
+
+    def mod(t, **kw):
+        m = sh.modifiers.new(t, t)
+        for k, v in kw.items():
+            setattr(m, k, v)
+        bpy.context.view_layer.objects.active = sh
+        with bpy.context.temp_override(object=sh, active_object=sh):
+            bpy.ops.object.modifier_apply(modifier=m.name)
+    mod('REMESH', mode='VOXEL', voxel_size=voxel, adaptivity=0.0)
+    mod('SMOOTH', factor=0.5, iterations=3)
+    me = sh.data
+    disp = [sculpt(kind.split('_')[0], v.co) for v in me.vertices]
+    for v, dd in zip(me.vertices, disp):
+        v.co += v.normal * dd
+    tris = sum(len(p.vertices) - 2 for p in me.polygons)
+    mod('DECIMATE', ratio=min(1.0, target / tris))
+    bm = bmesh.new()
+    bm.from_mesh(src.data)
+    bm.faces.ensure_lookup_table()
+    tree = BVHTree.FromBMesh(bm)
+    sw = [{src.vertex_groups[g.group].name: g.weight for g in v.groups} for v in src.data.vertices]
+    for p in me.polygons:
+        hit = tree.find_nearest(p.center)
+        p.material_index = bm.faces[hit[2]].material_index if hit[2] is not None else 0
+    fb = bmesh.new()   # majority filter: clean, straight hems instead of ragged nearest-face boundaries
+    fb.from_mesh(me)
+    fb.faces.ensure_lookup_table()
+    for _ in range(4):
+        cur = [f.material_index for f in fb.faces]
+        for f in fb.faces:
+            votes = {}
+            for e in f.edges:
+                for g in e.link_faces:
+                    votes[cur[g.index]] = votes.get(cur[g.index], 0) + 1
+            f.material_index = max(votes, key=votes.get)
+    fb.to_mesh(me)
+    fb.free()
+    slot = lambda pre: next((i for i, m in enumerate(me.materials) if m and m.name.startswith(pre)), None)
+    J, PA, BE, SK, SO = slot('jersey'), slot('pants'), slot('sole'), slot('skin'), slot('socks')
+    k0 = kind.split('_')[0]
+    for p in me.polygons:   # straight hems: jersey tucked at the belt, sleeve cut, pants ending below the knee
+        c, mi = p.center, p.material_index
+        sx = 1 if c.x > 0 else -1
+        if k0 == 'torso' and c.z < 1.06:
+            p.material_index = PA if c.z < 1.02 else BE if c.z < 1.05 else (J if mi == PA else mi)
+        elif k0 == 'arm':
+            a0, a1 = Vector((0.27 * sx, 0, 1.47)), Vector((0.31 * sx, 0, 1.17))
+            t = (c - a0).dot(a1 - a0) / (a1 - a0).length_squared
+            if -0.6 < t < 0.42 and mi == SK:
+                p.material_index = J
+            elif t >= 0.42 and mi == J:
+                p.material_index = SK
+        elif k0 == 'leg':
+            a0, a1 = Vector((0.12 * sx, 0, 0.52)), Vector((0.12 * sx, 0.02, 0.10))
+            t = (c - a0).dot(a1 - a0) / (a1 - a0).length_squared
+            if 0 < t < 0.17 and mi == SO:
+                p.material_index = PA
+            elif t >= 0.17 and mi == PA:
+                p.material_index = SO
+    W = []
+    for v in me.vertices:
+        loc, _, fi, _ = tree.find_nearest(v.co)
+        acc = {}
+        for fv in bm.faces[fi].verts:
+            k = 1.0 / ((fv.co - loc).length + 1e-4)
+            for b, w in sw[fv.index].items():
+                acc[b] = acc.get(b, 0.0) + w * k
+        W.append(acc)
+    nb = [[] for _ in me.vertices]
+    for e in me.edges:
+        a, b = e.vertices
+        nb[a].append(b)
+        nb[b].append(a)
+    for _ in range(2):   # soften weight seams so joints bend smoothly
+        W = [{b: 0.5 * W[i].get(b, 0) + 0.5 * sum(W[j].get(b, 0) for j in nb[i]) / max(1, len(nb[i]))
+              for b in set(W[i]).union(*[W[j] for j in nb[i]])} for i in range(len(W))]
+    for i, acc in enumerate(W):
+        tot = sum(acc.values()) or 1.0
+        for b, w in acc.items():
+            if w / tot > 0.01:
+                (sh.vertex_groups.get(b) or sh.vertex_groups.new(name=b)).add([i], w / tot, 'REPLACE')
+    bm.free()
+    bpy.data.objects.remove(src)
+    lib.box_uv(sh, 0.5)
+    return lib.smooth(sh)
+
+
 def build_player(colors, sfx='', offset=(0, 0, 0)):
     M = materials(colors, sfx)
     parts = build_body(M, int(colors['number']), sfx)
+    decals = [p for p in parts if p.name.startswith('num_')]
+    groups = {'torso': []}
     for p in parts:
-        if not p.name.startswith('num_'):
-            lib.subdivide(p, 1)
-    body = lib.join(parts, 'body' + sfx)
+        if p in decals:
+            continue
+        side = 'L' if '_L' in p.name else 'R' if '_R' in p.name else None
+        kind = 'arm' if p.name.split('_')[0] in ARM_PARTS else 'leg' if side else 'torso'
+        groups.setdefault(kind if kind == 'torso' else f'{kind}_{side}', []).append(p)
+    shells = [unify(objs, f'{k}{sfx}', *SHELL[k.split('_')[0]], k) for k, objs in groups.items()]
+    body = lib.join(shells + decals, 'body' + sfx)
     helm = build_helmet(M, sfx)
     for h in helm:
         h.vertex_groups.new(name='head').add(list(range(len(h.data.vertices))), 1.0, 'REPLACE')

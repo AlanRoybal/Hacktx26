@@ -34,7 +34,7 @@ def profile():
     for k in range(14):
         d += 2.0
         p.append((d, h))
-        seats.append((d - 1.0, h))
+        seats += [(d - 1.5, h), (d - 0.55, h)]
         h += 1.05
         p.append((d, h))
     d += 3.0
@@ -44,7 +44,7 @@ def profile():
     for k in range(10):
         d += 1.9
         p.append((d, h))
-        seats.append((d - 0.95, h))
+        seats += [(d - 1.45, h), (d - 0.5, h)]
         h += 1.2
         p.append((d, h))
     p += [(d, h + 2.4), (d + 1.5, h + 2.4), (d + 1.5, 0)]
@@ -66,7 +66,7 @@ def build_bowl(concrete):
     return ob, pts, nrm, seats
 
 
-def crowd_seats(pts, nrm, seats, spacing=0.9):
+def crowd_seats(pts, nrm, seats, spacing=0.7):
     """Seat positions (x, y, z, yaw, team). team 0 = Texas (y < 0 half), 1 = OU."""
     rng = np.random.default_rng(7)
     out = []
@@ -76,8 +76,6 @@ def crowd_seats(pts, nrm, seats, spacing=0.9):
             a, b = ring[i], ring[(i + 1) % SAMPLES]
             n = max(1, int((b - a).length / spacing))
             for j in range(n):
-                if rng.random() < 0.08:
-                    continue
                 q = a.lerp(b, (j + rng.uniform(0.3, 0.7)) / n)
                 yaw = math.atan2(-nrm[i].x, -nrm[i].y)
                 out.append((round(q.x, 2), round(q.y, 2), round(hh, 2), round(yaw, 3), 0 if q.y < 0 else 1))
