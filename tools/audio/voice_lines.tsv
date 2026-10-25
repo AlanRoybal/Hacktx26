@@ -1,38 +1,33 @@
-file	voice	line
-booth_a	Brian	Good evening, and welcome to the Cotton Bowl! It's the Red River Rivalry, Texas and Oklahoma, under the lights in Dallas!
-booth_b	Roger	And here come the Longhorns, right out of the smoke! Listen to this place, it is shaking!
-booth_c	Brian	Fireworks over Fair Park, and a sellout crowd split right down the fifty.
-booth_d	Roger	Tonight it comes down to the quarterback's arm. Let's play some football!
-bigtex_howdy	Bill	Howdy, folks! Welcome to the State Fair of Texas!
-qb_cadence_0	Harry	Blue eighty! Blue eighty! Set... Hut!
-qb_cadence_1	Harry	Omaha! Omaha! Ready... Set... Hut!
-qb_cadence_2	Harry	White twenty-two! White twenty-two! Set, hut!
-qb_cadence_3	Harry	Black forty! Black forty! Hut, hut!
-call_td_0	Brian	He's in! Touchdown! The Cotton Bowl explodes!
-call_td_1	Brian	Fires it into the end zone... caught! Touchdown!
-call_td_2	Roger	Oh, what a throw! Right on the money, and that's six!
-call_int_0	Brian	Intercepted! Picked off, and the defense has it!
-call_int_1	Roger	Oh, he never saw that defender. That's a costly pick.
-call_sack_0	Brian	Pressure... and he's sacked! Brought down hard!
-call_sack_1	Roger	Nowhere to go! The pocket collapsed and they got him.
-call_big_0	Brian	Deep shot... caught! A huge gain, and the crowd is on its feet!
-call_big_1	Roger	That's a big-time throw! Dropped it right in the bucket!
-call_catch_0	Brian	Quick throw, and it's complete.
-call_catch_1	Brian	Caught for a nice gain.
-call_first_0	Brian	And that'll move the chains. First down!
-call_first_1	Roger	Moving the sticks! First down.
-call_drop_0	Brian	Right through his hands! Dropped!
-call_drop_1	Roger	Oh, he's got to catch that one. That's right on him.
-call_pbu_0	Brian	Broken up! Great play in coverage!
-call_pbu_1	Roger	The defender gets a hand in there and knocks it away.
-call_inc_0	Brian	The pass falls incomplete.
-call_flag_0	Brian	Hold on, there's a flag on the play.
-call_fourth_0	Brian	Fourth down. This is the play of the game right here.
-call_fourth_1	Roger	Fourth down, and they're going for it! Gutsy call!
-call_final_0	Brian	Final seconds ticking away... it all comes down to this!
-call_scramble_0	Brian	He's out of the pocket! Scrambling!
-call_timeout_0	Brian	And that's a timeout on the field.
-call_spike_0	Brian	He spikes it to stop the clock.
-call_intro_0	Brian	Here we go, from the Cotton Bowl. It's Red River Saturday!
-call_win_0	Brian	And that's the ballgame! What a night in Dallas!
-call_lose_0	Roger	That one's going to sting. A tough night at the Cotton Bowl.
+file	source	seconds	line
+booth_intro	https://www.youtube.com/watch?v=fMl5xSzT-00	2.35-15.05, 135.5-137.3, 416.0-421.45, 438.75-440.95	ESPN/ABC 2025 Red River open: Welcome everyone to the Allstate Red River Rivalry... / here come the Longhorns / 92,000 strong, the tickets divided in half / a stunning visual
+bigtex_howdy	https://www.youtube.com/watch?v=xcDBPukoPMk	0.0-2.95, 12.5-19.3	Big Tex (2010): This is Big Tex talking to you. Big Tex is mighty proud to see all you folks down under, looking up and grinning at him.
+qb_cadence_0	https://www.youtube.com/watch?v=POBNcf9LTYc	64.0-66.4	Blue 80! Blue 80! Blue 80!
+qb_cadence_1	https://www.youtube.com/watch?v=POBNcf9LTYc	88.85-92.0	White 80! Blue 18! Blue 18! Blue 18!
+qb_cadence_2	https://www.youtube.com/watch?v=POBNcf9LTYc	94.4-96.4	White 90! White 90!
+qb_cadence_3	https://www.youtube.com/watch?v=POBNcf9LTYc	131.0-132.1, 136.2-136.9	Red 40! Omaha!
+call_td_0	https://www.youtube.com/watch?v=_L72D1JnE9s	5496.0-5499.75	Sam pushes across. Touchdown Texas!
+call_td_1	https://www.youtube.com/watch?v=_L72D1JnE9s	6979.9-6985.0	He's running, to the end zone, Sam bangs his way across. Touchdown Texas!
+call_td_2	https://www.youtube.com/watch?v=_L72D1JnE9s	6580.3-6582.6	To the goal line and he's across. Touchdown!
+call_int_0	https://www.youtube.com/watch?v=_L72D1JnE9s	2251.2-2254.95	Does fire for the end zone, and it's intercepted. Picked off!
+call_int_1	https://www.youtube.com/watch?v=_L72D1JnE9s	2252.4-2253.85	And it's intercepted.
+call_sack_0	https://www.youtube.com/watch?v=_L72D1JnE9s	5806.5-5810.1	Looks to throw, pressure coming. He's hit and dropped, another sack.
+call_sack_1	https://www.youtube.com/watch?v=_L72D1JnE9s	4991.25-4992.4	He'll be sacked.
+call_big_0	https://www.youtube.com/watch?v=_L72D1JnE9s	4362.3-4368.0	It goes in, wide open, the catch inside the 30, 25, to the 20, 15
+call_big_1	https://www.youtube.com/watch?v=_L72D1JnE9s	3289.8-3292.95	Breaks out of the tackle, across midfield and has it, first down.
+call_catch_0	https://www.youtube.com/watch?v=xPd9FAHqnGM	329.15-330.0	It's caught.
+call_catch_1	https://www.youtube.com/watch?v=_L72D1JnE9s	1075.1-1077.97	Caught, and holding on to it, stepping out of bounds.
+call_first_0	https://www.youtube.com/watch?v=_L72D1JnE9s	1564.55-1566.45	Throws right, ball caught and a first down.
+call_first_1	https://www.youtube.com/watch?v=xPd9FAHqnGM	315.95-316.8	And that's the first down.
+call_drop_0	https://www.youtube.com/watch?v=_L72D1JnE9s	4504.6-4506.95	Fires over the middle, ball off the hands.
+call_drop_1	https://www.youtube.com/watch?v=_L72D1JnE9s	1485.4-1487.75	Swings it left side, off the hands.
+call_pbu_0	https://www.youtube.com/watch?v=_L72D1JnE9s	3727.4-3728.6	Throws over the middle, broken up.
+call_pbu_1	https://www.youtube.com/watch?v=xPd9FAHqnGM	832.4-837.2	He throws, he fires for the end zone and it is tipped and incomplete.
+call_inc_0	https://www.youtube.com/watch?v=_L72D1JnE9s	2182.95-2183.95	It's incomplete.
+call_flag_0	https://www.youtube.com/watch?v=xPd9FAHqnGM	376.85-377.8	A flag's coming.
+call_fourth_0	https://www.youtube.com/watch?v=_L72D1JnE9s	898.2-899.25	He'll bring up fourth down.
+call_final_0	https://www.youtube.com/watch?v=xPd9FAHqnGM	442.35-444.05	Under a half minute remaining in the ball game.
+call_scramble_0	https://www.youtube.com/watch?v=xPd9FAHqnGM	351.3-352.5	Pressure coming. He escapes.
+call_timeout_0	https://www.youtube.com/watch?v=xPd9FAHqnGM	97.2-99.5	And now Sark uses the time out.
+call_intro_0	https://www.youtube.com/watch?v=xPd9FAHqnGM	263.7-266.3	Here's the kick. And this is an excellent kick.
+call_lose_0	https://www.youtube.com/watch?v=xPd9FAHqnGM	839.4-840.98	Oklahoma wins the game.
+call_win_0	https://www.youtube.com/watch?v=CFbixejj7uE	31.6-38.7	He hit it! Dicker, the kicker!

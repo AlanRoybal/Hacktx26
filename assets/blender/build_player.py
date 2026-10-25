@@ -175,15 +175,18 @@ def build_body(M, number, sfx=''):
         add(limb_w(fa, f'forearm_{s}', parent=f'upperarm_{s}'))
         tp = lib.loft(f'tape_{s}', el, wr, [(0.78, 0.052, 0.050), (1.0, 0.046, 0.044)], 10, M['tape'])
         add(limb_w(tp, f'forearm_{s}'))
-        hd = lib.loft(f'glove_{s}', wr, ht, [(0.0, .03, .04), (0.45, .028, .05), (0.8, .022, .046), (1.0, .015, .03)], 8, M['gloves'])
+        hd = lib.loft(f'glove_{s}', wr, ht, [(0.0, .03, .04), (0.4, .028, .05), (0.6, .026, .048), (0.66, .021, .04)], 8, M['gloves'])
         add(limb_w(hd, f'hand_{s}'))
         hv, wv = Vector(ht), Vector(wr)
-        for f in range(4):   # separate gloved fingers, slightly curled
-            o = (f - 1.5) * 0.017
-            b0 = wv.lerp(hv, 0.55) + Vector((0, o * 1.4, 0))
-            b1 = wv.lerp(hv, 1.05 - 0.06 * abs(f - 1.5)) + Vector((-0.004 * x, o * 1.5 - 0.006, 0))
-            b2 = b1 + (hv - wv).normalized() * 0.022 + Vector((0.006 * x, -0.012, 0))
-            fg = lib.tube(f'glove_f{f}_{s}', [b0, b1, b2], [0.0105, 0.0095, 0.0085], 6, M['gloves'], joints=True)
+        d = (hv - wv).normalized()
+        for f in range(4):   # separate gloved fingers with gaps between them, gently curled
+            o = (f - 1.5) * 0.0215
+            k = 1.0 - 0.13 * abs(f - 1.5) - (0.06 if f in (0, 3) else 0)
+            b0 = wv.lerp(hv, 0.6) + Vector((0, o, 0))
+            b1 = b0 + d * 0.038 * k + Vector((0, o * 0.12, 0))
+            b2 = b1 + d * 0.026 * k + Vector((-0.005 * x, 0, 0))
+            b3 = b2 + d * 0.02 * k + Vector((-0.008 * x, 0, 0))
+            fg = lib.tube(f'glove_f{f}_{s}', [b0, b1, b2, b3], [0.0098, 0.0092, 0.0085, 0.0075], 6, M['gloves'], joints=True)
             add(fg, bone=f'hand_{s}')
         th = Vector(wr) + Vector((-0.012 * x, -0.035, -0.03))
         tb = lib.loft(f'thumb_{s}', th, th + Vector((-0.01 * x, -0.025, -0.055)), [(0, .014, .014), (1, .01, .01)], 6, M['gloves'])

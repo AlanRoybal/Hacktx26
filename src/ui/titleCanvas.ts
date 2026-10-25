@@ -25,9 +25,11 @@ export function drawTitle(c: CanvasRenderingContext2D, g: Game, kind: 'title' | 
     txt(c, label, cx - w / 2 + 16, y, `${size}px ${IMPACT}`, col, 2, sel ? '#1A0A00' : '', 2, 'left');
     if (typeof value === 'number') {   // volume: 10 chunky blocks
       const x0 = cx + w / 2 - 30 - 10 * 9;
-      for (let k = 0; k < 10; k++) { c.fillStyle = k < value ? HOT : '#3A2A1E'; c.fillRect(x0 + k * 9, y - 5, 7, 10); }
-      txt(c, '◀', x0 - 10, y, `bold ${size - 4}px ${MONO}`, HOT); txt(c, '▶', x0 + 96, y, `bold ${size - 4}px ${MONO}`, HOT);
-    } else if (value) txt(c, `◀ ${value} ▶`, cx + w / 2 - 14, y, `bold ${size - 4}px ${MONO}`, HOT, 0, '', 0, 'right');
+      if (sel) { c.fillStyle = '#1A0A00'; c.fillRect(x0 - 3, y - 8, 10 * 9 + 4, 16); }
+      for (let k = 0; k < 10; k++) { c.fillStyle = k < value ? (sel ? '#FFFFFF' : HOT) : (sel ? '#5A3A24' : '#3A2A1E'); c.fillRect(x0 + k * 9, y - 5, 7, 10); }
+      const ar = sel ? '#FFFFFF' : HOT;
+      txt(c, '◀', x0 - 10, y, `bold ${size - 4}px ${MONO}`, ar); txt(c, '▶', x0 + 96, y, `bold ${size - 4}px ${MONO}`, ar);
+    } else if (value) txt(c, `◀ ${value} ▶`, cx + w / 2 - 14, y, `bold ${size - 4}px ${MONO}`, sel ? '#FFFFFF' : HOT, 0, '', 0, 'right');
   };
   if (kind === 'pause') {
     c.fillStyle = 'rgba(6,3,2,.86)'; c.fillRect(0, 0, UI_W, UI_H);

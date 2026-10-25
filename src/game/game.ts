@@ -254,6 +254,7 @@ export class Game {
   /** Swap which roster is on offense. The offense always drives the same way so the QB view and play logic stay put. */
   setPossession(team: 'tex' | 'ou') {
     this.offTeam = team;
+    this.w.setArmTeam(team);
     this.w.setFlip(this.mode === '1v1' && (team === 'ou') !== (this.half === 2));
     const o = this.sides[team], d = this.sides[team === 'tex' ? 'ou' : 'tex'];
     this.off = o.off; this.def = d.def; this.qbA = o.qb;

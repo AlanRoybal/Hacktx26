@@ -5,8 +5,8 @@ const CLIPS = ['crowd_bed', 'crowd_roar', 'crowd_ooh', 'crowd_boo', 'texas_fight
   'qb_cadence_0', 'qb_cadence_1', 'qb_cadence_2', 'qb_cadence_3'] as const;
 export type Clip = typeof CLIPS[number];
 // broadcast calls: public/audio/call_<kind>_<i>.ogg
-const CALLS = { td: 3, int: 2, sack: 2, big: 2, catch: 2, first: 2, drop: 2, pbu: 2, inc: 1, flag: 1, fourth: 2, final: 1,
-  scramble: 1, timeout: 1, spike: 1, intro: 1, win: 1, lose: 1 };
+const CALLS = { td: 3, int: 2, sack: 2, big: 2, catch: 2, first: 2, drop: 2, pbu: 2, inc: 1, flag: 1, fourth: 1, final: 1,
+  scramble: 1, timeout: 1, spike: 0, intro: 1, win: 1, lose: 1 };
 export type Call = keyof typeof CALLS;
 const CALL_FILES = Object.entries(CALLS).flatMap(([k, n]) => Array.from({ length: n }, (_, i) => `call_${k}_${i}`));
 

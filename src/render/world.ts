@@ -135,10 +135,18 @@ export class World {
   props!: GLTF;
   football!: THREE.Object3D;
   fpArm!: THREE.Group;
+  private armMats = new Map<string, [THREE.MeshStandardMaterial, THREE.Color]>();
   fpBall: THREE.Object3D | null = null;
   /** Static stadium (stands, crowd, lights, props). Turned 180° so a 1v1 offense drives toward the other end. */
   env = new THREE.Group();
   flipped = false;
+  /** OU QB: white road jersey, crimson gloves and wristband. */
+  setArmTeam(team: 'tex' | 'ou') {
+    const OU: Record<string, string> = { jersey: '#EDEAE2', gloves: '#841617', wristband: '#841617', skin: '#C08A64' };
+    for (const [n, [m, c]] of this.armMats) {
+      if (team === 'ou' && OU[n]) m.color.set(OU[n]); else m.color.copy(c);
+    }
+  }
   setFlip(f: boolean) { this.flipped = f; this.env.rotation.y = f ? Math.PI : 0; this.env.updateMatrixWorld(true); }
   placeChains(losZ: number, firstDownZ: number) {
     const c = this.propObjs.get('chains'), d = this.propObjs.get('down_marker');
@@ -321,7 +329,13 @@ export class World {
     this.fpArm = new THREE.Group();
     this.fpArm.add(inner);
     this.fpArm.position.set(0.25, -0.17, -0.7);
-    this.fpArm.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) { (m.material as THREE.MeshStandardMaterial).fog = false; m.renderOrder = 10; } });
+    this.fpArm.traverse(o => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const mat = m.material as THREE.MeshStandardMaterial;
+      mat.fog = false; m.renderOrder = 10;
+      this.armMats.set(mat.name, [mat, mat.color.clone()]);
+    });
     this.camera.add(this.fpArm);
     onProgress('crowd');
     this.buildCrowd(seats.seats as number[][]);
