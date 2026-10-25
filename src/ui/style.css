@@ -43,3 +43,7 @@ canvas#c { position: fixed; inset: 0; width: 100vw; height: 100vh; image-renderi
 #screen .enter { margin-top: 3vh; } #screen .ini { font: 900 12vh Impact, sans-serif; letter-spacing: .25em; color: #f2e6d6; }
 #screen .ini span.sel { color: #FF8A2A; border-bottom: 6px solid #FF8A2A; }
 #screen p.still { animation: none; font-size: 1.8vh; }
+#screen .menu { margin-top: 4vh; display: flex; flex-direction: column; gap: 1.4vh; min-width: 34vw; }
+#screen .mi { font: 900 4.6vh Impact, sans-serif; letter-spacing: .12em; color: #8a7a68; padding: .4vh 2vw; border-left: 6px solid transparent; }
+#screen .mi.sel { color: #fff; border-left-color: #BF5700; background: rgba(191,87,0,.25); }
+#screen .menu.set .mi { display: flex; justify-content: space-between; gap: 4vw; font-size: 3vh; } #screen .menu.set b { color: #FF8A2A; }

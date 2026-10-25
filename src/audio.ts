@@ -20,6 +20,10 @@ export class Audio {
   crowdLP = this.ctx.createBiquadFilter();
   heart = this.ctx.createGain();
   voice = this.ctx.createGain();
+  musicOut = this.ctx.createGain();
+  crowdOut = this.ctx.createGain();
+  /** Settings volumes, 0..10 each. */
+  setVolumes(music: number, voice: number, crowd: number) { this.musicOut.gain.value = music / 7; this.voice.gain.value = 1.35 * voice / 7; this.crowdOut.gain.value = crowd / 7; }
   private voiceSrc: AudioBufferSourceNode | null = null;
   private voiceUntil = 0;
   private musicSrc: { src: AudioBufferSourceNode; g: GainNode } | null = null;
@@ -31,8 +35,8 @@ export class Audio {
 
   constructor() {
     this.crowdLP.type = 'lowpass';
-    this.crowd.connect(this.crowdLP).connect(this.master);
-    this.music.connect(this.master);
+    this.crowd.connect(this.crowdLP).connect(this.crowdOut).connect(this.master);
+    this.music.connect(this.musicOut).connect(this.master);
     this.sfx.connect(this.master);
     this.heart.connect(this.master);
     this.voice.connect(this.master);

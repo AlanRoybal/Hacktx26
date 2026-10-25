@@ -111,6 +111,22 @@ export class World {
   pixel = true;
   frame = 0;
 
+  quality: 'low' | 'high' = 'high';
+  /** Low: no shadow map, 60% of the crowd instances, smaller internal render target. */
+  setQuality(q: 'low' | 'high') {
+    this.quality = q;
+    const low = q === 'low';
+    this.towerLights.forEach((L, i) => { L.castShadow = !low && i === 0; });
+    this.renderer.shadowMap.enabled = !low;
+    for (const c of this.crowd) {
+      const full = (c.mesh.userData.full ??= c.mesh.count) as number;
+      c.mesh.count = low ? Math.floor(full * 0.6) : full;
+    }
+    this.rt.setSize(low ? 800 : INTERNAL_W, low ? 450 : INTERNAL_H);
+    this.post.mat.uniforms.uRes.value.set(low ? 800 : INTERNAL_W, low ? 450 : INTERNAL_H);
+    this.scene.traverse(o => { const m = (o as THREE.Mesh).material as THREE.Material | undefined; if (m) m.needsUpdate = true; });
+  }
+
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(1);

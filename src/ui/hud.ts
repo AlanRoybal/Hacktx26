@@ -17,6 +17,8 @@ function routeSvg(i: number) {
   return s + '</svg>';
 }
 
+const bar = (n: number) => '■'.repeat(n) + '□'.repeat(10 - n);
+
 function boardHtml(rows: BoardRow[], me: number, n = 5) {
   if (!rows.length) return '';
   return `<table class="board"><tr><th colspan="4">LEADERBOARD</th></tr>` + rows.slice(0, n).map((r, i) =>
@@ -54,8 +56,18 @@ export function makeHud(buzz: (ms: number, amp?: number) => void, rumble: Hooks[
       const el = $('screen');
       $('scorebug').style.display = kind === 'title' ? 'none' : 'flex';
       if (kind === 'none') { el.classList.remove('on'); return; }
-      if (kind === 'title') el.innerHTML = `<h1>RED RIVER</h1><h2>TEXAS VS OKLAHOMA · COTTON BOWL · DALLAS</h2>
-        <p>HOLD ZR (OR CLICK) TO TAKE THE FIELD</p>${boardHtml(g.board(), -1)}`;
+      if (kind === 'title') {
+        const m = g.menu, st = g.settings;
+        const val = (r: string) => ({ QUALITY: st.quality.toUpperCase(), MUSIC: bar(st.music), ANNOUNCERS: bar(st.voice), CROWD: bar(st.crowd),
+          'THROWING HAND': st.hand === 'auto' ? 'AUTO' : st.hand === 'R' ? 'RIGHT' : 'LEFT' } as Record<string, string>)[r] ?? '';
+        el.innerHTML = m.page === 'home'
+          ? `<h1>RED RIVER</h1><h2>TEXAS VS OKLAHOMA · COTTON BOWL · DALLAS</h2>
+             <div class="menu">${['START', 'SETTINGS'].map((t, i) => `<div class="mi ${i === m.sel ? 'sel' : ''}">${t}</div>`).join('')}</div>
+             <p class="still">STICK / ARROWS TO MOVE · ZR / CLICK / ENTER TO SELECT</p>${boardHtml(g.board(), -1)}`
+          : `<div class="big">SETTINGS</div><div class="menu set">${(g.constructor as any).SETTINGS_ROWS.map((r: string, i: number) =>
+              `<div class="mi ${i === m.sel ? 'sel' : ''}"><span>${r}</span><b>${val(r) ? '◀ ' + val(r) + ' ▶' : ''}</b></div>`).join('')}</div>
+             <p class="still">UP / DOWN TO PICK · LEFT / RIGHT TO CHANGE · ZR TO SELECT</p>`;
+      }
       else {
         const s = g.stats;
         const card = `<table><tr><td>COMP / ATT</td><td>${s.comp} / ${s.att}</td></tr><tr><td>PASS YDS</td><td>${s.yds}</td></tr>

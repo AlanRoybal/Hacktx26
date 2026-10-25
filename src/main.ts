@@ -46,11 +46,21 @@ async function boot() {
   await Promise.all([world.load(loadingText), loadPlayerAsset(), audio.load()]);
   game = new Game(world, audio, makeHud(hooksBuzz, (steps, both) => joy.pattern(steps, both)));
   window.__rr = { game, world, joy, audio, mouse };
+  const apply = (st: Game['settings']) => {
+    audio.setVolumes(st.music, st.voice, st.crowd);
+    (joy as any).preferHand = st.hand;
+    if (st.quality !== 'auto') world.setQuality(st.quality);
+  };
+  game.onSettings = apply;
+  game.onConnect = async () => { await joy.connect(true); if (joy.pads.size) mode = 'joycon'; };
+  apply(game.settings);
+  game.h.screen('title', game);
   loaded();
   joy.connect(false);
   requestAnimationFrame(frame);
 }
 
+const fpsLog: number[] = [];
 let last = performance.now(), acc = 0, fps = 0, frames = 0, fpsT = 0;
 const STEP = 1 / 120;
 const tmpQ = new THREE.Quaternion();
@@ -88,6 +98,12 @@ function frame(now: number) {
     if (b.stickClick && !prev.stickClick && game.state === 'POCKET') game.scrambleReq = true;
     (p as any)._btn = { ...b };
   }
+  if (game.state === 'TITLE' && joy.connected() && joy.active) {
+    const [sx, sy] = joy.active.stick, J = joy as any;
+    if (Math.abs(sy) > 0.7 && !J._mflick) { J._mflick = true; game.menuMove(sy > 0 ? -1 : 1); }
+    else if (Math.abs(sx) > 0.7 && !J._mflick) { J._mflick = true; game.menuAdjust(sx > 0 ? 1 : -1); }
+    if (Math.hypot(sx, sy) < 0.3) J._mflick = false;
+  }
   if (game.entry && joy.connected() && joy.active) {
     const sy = joy.active.stick[1];
     if (Math.abs(sy) > 0.7 && !(joy as any)._eflick) { (joy as any)._eflick = true; game.entryStep(sy > 0 ? 1 : -1); }
@@ -96,7 +112,11 @@ function frame(now: number) {
   while (acc >= STEP) { game.step(STEP); acc -= STEP; }
   world.render(now / 1000);
   frames++;
-  if (now - fpsT > 500) { fps = frames * 1000 / (now - fpsT); frames = 0; fpsT = now; }
+  if (now - fpsT > 500) {
+    fps = frames * 1000 / (now - fpsT); frames = 0; fpsT = now;
+    // auto quality: after a few seconds of measuring, drop to Low if the Mac can't hold ~75 fps
+    if (game.settings.quality === 'auto' && world.quality === 'high') { fpsLog.push(fps); if (fpsLog.length > 8) fpsLog.shift(); if (fpsLog.length === 8 && fpsLog.reduce((a, b) => a + b) / 8 < 75) world.setQuality('low'); }
+  }
   updateUi();
   requestAnimationFrame(frame);
 }
@@ -127,6 +147,11 @@ addEventListener('keydown', async e => {
     if (/^[a-zA-Z]$/.test(e.key)) return game.entryType(e.key);
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') return game.entryStep(e.key === 'ArrowUp' ? 1 : -1);
     if (e.key === 'Enter' || e.key === ' ') return game.entryConfirm();
+  }
+  if (game.state === 'TITLE') {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') return game.menuMove(e.key === 'ArrowUp' ? -1 : 1);
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') return game.menuAdjust(e.key === 'ArrowRight' ? 1 : -1);
+    if (e.key === 'Enter' || e.key === ' ') return game.menuSelect();
   }
   if (e.key === 's') game.spike();
   else if (e.key === 't') game.callTimeout();

@@ -196,6 +196,8 @@ export class JoyConInput {
   /** Whichever trigger the player holds becomes the throwing hand; stalled pad hands off after 2 s. */
   private onSample(jc: JoyCon, s: Sample) {
     if (this.recording) this.recording.push({ ...s, t: Math.round(s.t * 10) / 10 });
+    const want = (this as any).preferHand as string | undefined;
+    if (want === 'R' || want === 'L') { const match = [...this.pads.values()].some(p => p.isLeft === (want === 'L') && performance.now() - p.lastReport < 300); if (match && jc.isLeft !== (want === 'L')) return; }
     const stale = !this.active || performance.now() - this.active.lastReport > 2000;
     if ((stale || (s.trig && !this.armed)) && this.active !== jc && (s.trig || stale)) this.active = jc;
     if (jc !== this.active || !this.enabled) return;

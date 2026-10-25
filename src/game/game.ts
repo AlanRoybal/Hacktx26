@@ -87,6 +87,41 @@ export class Game {
   private benchT = 0;
   private deadHold = 1.8;
   private cadT = 0;
+  menu = { page: 'home' as 'home' | 'settings', sel: 0 };
+  settings = Object.assign({ quality: 'auto', music: 7, voice: 7, crowd: 7, hand: 'auto' }, JSON.parse(localStorage.getItem('rrqb_settings') || '{}')) as
+    { quality: 'auto' | 'low' | 'high'; music: number; voice: number; crowd: number; hand: 'auto' | 'R' | 'L' };
+  onSettings: (s: Game['settings']) => void = () => {};
+  onConnect: () => void = () => {};
+  static readonly SETTINGS_ROWS = ['QUALITY', 'MUSIC', 'ANNOUNCERS', 'CROWD', 'THROWING HAND', 'CONNECT JOY-CONS', 'BACK'];
+  menuMove(d: number) {
+    if (this.state !== 'TITLE') return;
+    const n = this.menu.page === 'home' ? 2 : Game.SETTINGS_ROWS.length;
+    this.menu.sel = (this.menu.sel + d + n) % n; this.h.screen('title', this);
+  }
+  menuAdjust(d: number) {
+    if (this.state !== 'TITLE' || this.menu.page !== 'settings') return;
+    const s = this.settings, row = Game.SETTINGS_ROWS[this.menu.sel];
+    const cyc = <T,>(arr: T[], v: T) => arr[(arr.indexOf(v) + d + arr.length) % arr.length];
+    if (row === 'QUALITY') s.quality = cyc(['auto', 'low', 'high'] as const as unknown as ('auto' | 'low' | 'high')[], s.quality);
+    else if (row === 'THROWING HAND') s.hand = cyc(['auto', 'R', 'L'] as ('auto' | 'R' | 'L')[], s.hand);
+    else if (row === 'MUSIC') s.music = THREE.MathUtils.clamp(s.music + d, 0, 10);
+    else if (row === 'ANNOUNCERS') s.voice = THREE.MathUtils.clamp(s.voice + d, 0, 10);
+    else if (row === 'CROWD') s.crowd = THREE.MathUtils.clamp(s.crowd + d, 0, 10);
+    localStorage.setItem('rrqb_settings', JSON.stringify(s));
+    this.onSettings(s); this.h.screen('title', this);
+  }
+  menuSelect() {
+    if (this.menu.page === 'home') {
+      if (this.menu.sel === 0) return this.start();
+      this.menu = { page: 'settings', sel: 0 };
+    } else {
+      const row = Game.SETTINGS_ROWS[this.menu.sel];
+      if (row === 'BACK') this.menu = { page: 'home', sel: 1 };
+      else if (row === 'CONNECT JOY-CONS') this.onConnect();
+      else return this.menuAdjust(1);
+    }
+    this.h.screen('title', this);
+  }
   private throwT0 = 0;
   private tdT = 0;
   private sackPlayT = -1;
@@ -132,7 +167,7 @@ export class Game {
 
   // ---------- flow ----------
   toTitle() {
-    this.state = 'TITLE'; this.t = 0;
+    this.state = 'TITLE'; this.t = 0; this.menu = { page: 'home', sel: 0 };
     this.resetDrive();
     this.setupPlay();
     this.h.screen('title', this);
@@ -242,7 +277,8 @@ export class Game {
 
   onTrigger(down: boolean) {
     if (down && this.state === 'OVER' && this.entry) { if (this.t > 1.3) this.entryConfirm(); return; }
-    if (down && (this.state === 'TITLE' || (this.state === 'OVER' && this.t > Math.max(2, this.overT + 1)))) return this.start();
+    if (down && this.state === 'TITLE') { if (this.t > 0.4) this.menuSelect(); return; }
+    if (down && this.state === 'OVER' && this.t > Math.max(2, this.overT + 1)) { this.toTitle(); return; }
     if (down && this.state === 'PRESNAP' && this.t > 0.6) this.snap();
     if (down && this.state === 'CUTSCENE' && this.t > 1.5) this.t = 99;
     if (down && this.state === 'SACK' && this.t > 1.6) this.t = 99;
