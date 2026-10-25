@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { World, YD, OU_GOAL_Z, mulberry } from '../render/world';
 import { Actor } from '../render/players';
-import { PLAYS, OFF_SPOT, DEF_SPOT, OFF_NUM, DEF_NUM, OFF_NAME, DEF_NAME, ELIGIBLE, makeCoverage, type Play, type OffPos, type DefPos, type DefCall, type Cover } from './plays';
+import { PLAYS, OFF_SPOT, DEF_SPOT, OFF_NUM, DEF_NUM, OFF_NAME, DEF_NAME, OU_OFF_NUM, OU_OFF_NAME, TEX_DEF_NUM, TEX_DEF_NAME, ELIGIBLE, makeCoverage, type Play, type OffPos, type DefPos, type DefCall, type Cover } from './plays';
 import type { ThrowEvent } from '../input/types';
 import type { Audio, Clip } from '../audio';
 
-export type State = 'TITLE' | 'INTRO' | 'PRESNAP' | 'SNAP' | 'POCKET' | 'AIR' | 'RUN' | 'SACK' | 'SCRAMBLE' | 'TACKLED' | 'DEAD' | 'CUTSCENE' | 'OVER' | 'POTG';
+export type State = 'TITLE' | 'INTRO' | 'PRESNAP' | 'SNAP' | 'POCKET' | 'AIR' | 'RUN' | 'SACK' | 'SCRAMBLE' | 'TACKLED' | 'DEAD' | 'CUTSCENE' | 'OVER' | 'POTG' | 'HANDOFF';
 type Result = { kind: 'catch' | 'inc' | 'int' | 'sack' | 'fumble' | 'td' | 'pi' | 'run'; yards: number; time: number; oob?: boolean; why?: string };
 
 export interface Hooks {
@@ -133,7 +133,7 @@ export class Game {
   pauseSel = 0;
   togglePause() {
     if (this.paused) return this.resume();
-    if (['TITLE', 'INTRO', 'OVER', 'POTG'].includes(this.state)) return;
+    if (['TITLE', 'INTRO', 'OVER', 'POTG', 'HANDOFF'].includes(this.state)) return;
     this.paused = true; this.pauseSel = 0;
     this.audio.ctx.suspend();
     this.h.screen('pause', this);
@@ -157,7 +157,7 @@ export class Game {
   static readonly SETTINGS_ROWS = ['DIFFICULTY', 'QUALITY', 'MUSIC', 'ANNOUNCERS', 'CROWD', 'THROWING HAND', 'CONNECT JOY-CONS', 'BACK'];
   menuMove(d: number) {
     if (this.state !== 'TITLE') return;
-    const n = this.menu.page === 'home' ? 2 : Game.SETTINGS_ROWS.length;
+    const n = this.menu.page === 'home' ? 3 : Game.SETTINGS_ROWS.length;
     this.menu.sel = (this.menu.sel + d + n) % n; this.h.screen('title', this);
   }
   menuAdjust(d: number) {
@@ -175,11 +175,11 @@ export class Game {
   }
   menuSelect() {
     if (this.menu.page === 'home') {
-      if (this.menu.sel === 0) return this.startIntro();
+      if (this.menu.sel < 2) { this.mode = this.menu.sel === 0 ? 'solo' : '1v1'; return this.startIntro(); }
       this.menu = { page: 'settings', sel: 0 };
     } else {
       const row = Game.SETTINGS_ROWS[this.menu.sel];
-      if (row === 'BACK') this.menu = { page: 'home', sel: 1 };
+      if (row === 'BACK') this.menu = { page: 'home', sel: 2 };
       else if (row === 'CONNECT JOY-CONS') this.onConnect();
       else return this.menuAdjust(1);
     }
@@ -210,6 +210,12 @@ export class Game {
     OFF.forEach(p => { const a = new Actor('tex', OFF_NUM[p], OFF_NAME[p]); a.role = p; this.off.set(p, a); w.scene.add(a.obj); });
     DEF.forEach(p => { const a = new Actor('ou', DEF_NUM[p], DEF_NAME[p]); a.role = p; this.def.set(p, a); w.scene.add(a.obj); });
     this.qbA = new Actor('tex', 16, 'MANNING'); this.qbA.role = 'QB'; this.qbA.setLayer(2); w.scene.add(this.qbA.obj);
+    const ouOff = new Map<OffPos, Actor>(), texDef = new Map<DefPos, Actor>();
+    OFF.forEach(p => { const a = new Actor('ou', OU_OFF_NUM[p], OU_OFF_NAME[p]); a.role = p; ouOff.set(p, a); w.scene.add(a.obj); });
+    DEF.forEach(p => { const a = new Actor('tex', TEX_DEF_NUM[p], TEX_DEF_NAME[p]); a.role = p; texDef.set(p, a); w.scene.add(a.obj); });
+    const ouQb = new Actor('ou', 10, 'MATEER'); ouQb.role = 'QB'; ouQb.setLayer(2); w.scene.add(ouQb.obj);
+    this.sides = { tex: { off: this.off, def: texDef, qb: this.qbA }, ou: { off: ouOff, def: this.def, qb: ouQb } };
+    this.setPossession('tex');
     for (const r of Object.keys(REF_SPOT)) { const a = new Actor('ref', 0); a.role = r; this.refs.push(a); w.scene.add(a.obj); }
     const nums = { tex: [2, 5, 7, 9, 12, 19, 22], ou: [3, 6, 7, 9, 12, 14, 20] };
     for (const team of ['tex', 'ou'] as const) nums[team].forEach((n, i) => {
@@ -221,6 +227,42 @@ export class Game {
     });
     this.coach = new Actor('coach', 0); this.coach.heading = this.coach.obj.rotation.y = Math.PI / 2; this.coach.play('Idle', 0.01); w.scene.add(this.coach.obj);
     this.toTitle();
+  }
+
+  mode: 'solo' | '1v1' = 'solo';
+  offTeam: 'tex' | 'ou' = 'tex';
+  get defTeam() { return this.offTeam === 'tex' ? 'ou' : 'tex'; }
+  private sides!: Record<'tex' | 'ou', { off: Map<OffPos, Actor>; def: Map<DefPos, Actor>; qb: Actor }>;
+  /** Swap which roster is on offense. The offense always drives the same way so the QB view and play logic stay put. */
+  setPossession(team: 'tex' | 'ou') {
+    this.offTeam = team;
+    const o = this.sides[team], d = this.sides[team === 'tex' ? 'ou' : 'tex'];
+    this.off = o.off; this.def = d.def; this.qbA = o.qb;
+    for (const sd of Object.values(this.sides)) {
+      for (const a of [...sd.off.values(), sd.qb]) a.obj.visible = sd === o;
+      for (const a of sd.def.values()) a.obj.visible = sd === d;
+    }
+  }
+  fight(team: 'tex' | 'ou') { return team === 'tex' ? 'texas_fight' : 'boomer_sooner'; }
+  /** 1v1: player 1 is Texas, player 2 is Oklahoma. */
+  get qbPlayer() { return this.offTeam === 'tex' ? 1 : 2; }
+  private driveOver(why: string) {
+    if (this.mode === 'solo') return this.gameOver(why === 'TOUCHDOWN', why === 'TOUCHDOWN' ? '' : why);
+    if (this.clock <= 0) return this.gameOver(this.tex > this.ou, 'TIME EXPIRED');
+    this.handoffWhy = why;
+    this.setPossession(this.defTeam);
+    this.down = 1; this.toGo = 10; this.ballOn = 45; this.clockRunning = false;
+    this.setupPlay();
+    this.state = 'HANDOFF'; this.t = 0;
+    this.h.hud(this);
+    this.h.screen('handoff', this);
+  }
+  handoffWhy = '';
+  private endHandoff() {
+    this.h.screen('none', this);
+    this.h.banner(`${this.offName} BALL`, `PLAYER ${this.qbPlayer} AT QB`);
+    this.audio.playMusic(this.offTeam === 'tex' ? 'wabash' : 'boomer_sooner', false, 0.8);
+    this.toPresnap();
   }
 
   get losZ() { return OU_GOAL_Z - this.ballOn * YD; }
@@ -240,6 +282,8 @@ export class Game {
 
   resetDrive() {
     Object.assign(this, { clock: 105, down: 1, toGo: 10, ballOn: 45, tex: 27, ou: 31, spikeTex: 0, spikeOU: 0, timeouts: 3, clockRunning: false, stopClock: false, entry: null });
+    if (this.mode === '1v1') Object.assign(this, { clock: 360, tex: 0, ou: 0 });
+    if (this.sides) this.setPossession('tex');
     this.stats = { att: 0, comp: 0, yds: 0, td: 0, int: 0, sacks: 0, bestSpiral: 1, lastPlay: '', fast: 0, long: 0 };
     this.best = null;
   }
@@ -249,7 +293,8 @@ export class Game {
     this.audio.start();
     this.resetDrive();
     this.h.screen('none', this);
-    this.h.banner('TEXAS BALL', `OU ${this.ballOn}  |  DOWN 4  |  1:45 LEFT`);
+    if (this.mode === '1v1') this.h.banner('TEXAS BALL', 'PLAYER 1 AT QB  ·  SWAP AFTER EVERY DRIVE');
+    else this.h.banner('TEXAS BALL', `OU ${this.ballOn}  |  DOWN 4  |  1:45 LEFT`);
     this.audio.playMusic('wabash', false);
     if (!this.fromIntro) this.audio.call('intro', true, 0.6);
     this.fromIntro = false;
@@ -344,6 +389,7 @@ export class Game {
 
   onTrigger(down: boolean) {
     if (this.paused) { if (down) this.pauseSelect(); return; }
+    if (down && this.state === 'HANDOFF') { if (this.t > 1) this.endHandoff(); return; }
     if (down && this.state === 'POTG') { if (this.t > 2) this.endPotg(); return; }
     if (down && this.state === 'OVER' && this.entry) { if (this.t > 1.3) this.entryConfirm(); return; }
     if (down && this.state === 'INTRO') { if (this.t > 1) { this.audio.stopVoice(); this.start(); } return; }
@@ -525,7 +571,7 @@ export class Game {
     if (s === 'PRESNAP' && this.clockRunning) {
       this.clock -= dtReal;
       if ((this.hudT += dtReal) > 0.2) { this.hudT = 0; this.h.hud(this); }
-      if (this.clock <= 0) { this.clock = 0; this.gameOver(false, 'TIME EXPIRED'); }
+      if (this.clock <= 0) { this.clock = 0; this.gameOver(this.mode === '1v1' && this.tex > this.ou, 'TIME EXPIRED'); }
     }
     if (s === 'POCKET') this.pocket(dt);
     if (s === 'AIR') this.air(dt);
@@ -755,7 +801,7 @@ export class Game {
       r.pos.copy(spot); r.face(cam.position); r.play('HornsDown', 0.9, 1, true);
       this.sfx('grunt', r.pos, 0.6, 0.8);
     }
-    if (r.data.cel === 1 && t > 1.9) { r.data.cel = 2; r.play('SackDance', 0.25, 1.2); this.audio.playMusic('boomer_sooner', false, 0.8); this.w.jumboLive(); }
+    if (r.data.cel === 1 && t > 1.9) { r.data.cel = 2; r.play('SackDance', 0.25, 1.2); this.audio.playMusic(this.fight(this.defTeam), false, 0.8); this.w.jumboLive(); }
     fx.mates.forEach((m, i) => {
       m.data.done = true;
       const side = (i === 0 ? 1 : -1);
@@ -820,8 +866,8 @@ export class Game {
       for (const p of ELIGIBLE) { const r = this.off.get(p)!; const d = chest(r); if (d < 1.35 && d < wd) { wd = d; who = r; } }
       if (b.vel.y < 0 && b.pos.y < 2.5) for (const d of defs) { const dd = chest(d); if (dd < 1.0 && dd < wd) { wd = dd; who = d; } }
     }
-    if (who && who.team === 'tex') return this.resolveCatch(who, wd, defs, chest);
-    if (who && who.team === 'ou' && !b.data?.missed) {
+    if (who && who.team === this.offTeam) return this.resolveCatch(who, wd, defs, chest);
+    if (who && who.team === this.defTeam && !b.data?.missed) {
       const r = this.rng();
       if (r < (who.data.jumper ? 0.6 : 0.35) + 0.25 * b.wobble) return this.intercept(who);
       if (r < 0.85) return this.breakup(who, b.target);
@@ -1048,14 +1094,14 @@ export class Game {
     this.refSignal('td', c.pos);
     this.coachReact('Celebrate', 6);
     c.play('Celebrate', 0.2); c.vel.set(0, 0, 0); c.data.done = true;
-    this.tex += 7;
+    if (this.offTeam === 'tex') this.tex += 7; else this.ou += 7;
     this.clock = Math.max(1, this.clock - Math.ceil(this.playT));
-    this.h.banner('TOUCHDOWN', 'TEXAS', '#BF5700');
+    this.h.banner('TOUCHDOWN', this.offName, this.offTeam === 'tex' ? '#BF5700' : '#841617');
     this.h.hud(this);
     this.audio.play('cannon', 1);
     this.audio.play('crowd_roar', 1, 1, 'crowd');
-    this.audio.playMusic('texas_fight', false, 1);
-    this.w.drawJumbo(['TOUCHDOWN', 'TEXAS']);
+    this.audio.playMusic(this.fight(this.offTeam), false, 1);
+    this.w.drawJumbo(['TOUCHDOWN', this.offName]);
     this.jumboUntil = 99;
     this.spikeTex = 1.3;
     this.w.post.mat.uniforms.uFlash.value = 0.25;
@@ -1074,11 +1120,11 @@ export class Game {
     cam.up.set(0, 1, 0);
     if (this.t > 2.2 && this.t - dt <= 2.2) { this.startReplay(this.tdT - 4.5, this.tdT + 1); if (!this.replay) this.w.jumboLive(); }
     if (this.t > 3) this.w.mosaicTarget = 1;
-    if (this.t > 7.5) this.gameOver(true);
+    if (this.t > 7.5) this.driveOver('TOUCHDOWN');
   }
 
   /** Play of the game: the best play so far, with its recorded frames. */
-  best: { rec: Float32Array[]; actors: Actor[]; score: number; label: string; team: string } | null = null;
+  best: { rec: Float32Array[]; actors: Actor[]; score: number; label: string; team: string; poss: 'tex' | 'ou' } | null = null;
   clip: { status: 'saving' | 'ready' | 'failed'; qr?: string; url?: string } | null = null;
   onPotgEnd: () => void = () => {};
   private potgF = 0;
@@ -1086,9 +1132,9 @@ export class Game {
     const sc = r.kind === 'td' ? 100 + r.yards : r.kind === 'catch' || r.kind === 'run' ? r.yards * 2 : r.kind === 'pi' ? 10 : 0;
     if (sc <= 0 || this.rec.length < 20 || (this.best && this.best.score >= sc)) return;
     const label = r.kind === 'td' ? `${r.yards} YD TOUCHDOWN` : r.kind === 'pi' ? 'DREW THE FLAG' : `${r.yards} YD ${r.kind === 'run' ? 'RUN' : 'CATCH'}`;
-    this.best = { rec: this.rec, actors: this.recActors, score: sc, label, team: this.offName };
+    this.best = { rec: this.rec, actors: this.recActors, score: sc, label, team: this.offName, poss: this.offTeam };
   }
-  get offName() { return 'TEXAS'; }
+  get offName() { return this.offTeam === 'tex' ? 'TEXAS' : 'OKLAHOMA'; }
   private potg(dtReal: number) {
     const B = this.best!, n = B.rec.length, a = Math.max(0, n - 1 - 140);
     if (this.t - dtReal <= 0) this.potgF = a;
@@ -1110,7 +1156,7 @@ export class Game {
     const r = this.result!;
     this.scorePlay(r);
     this.w.camera.up.set(0, 1, 0);
-    if (r.kind === 'int' || r.kind === 'fumble') return this.gameOver(false, r.kind === 'int' ? 'INTERCEPTED' : 'FUMBLE LOST');
+    if (r.kind === 'int' || r.kind === 'fumble') return this.driveOver(r.kind === 'int' ? 'INTERCEPTED' : 'FUMBLE LOST');
     this.clock -= Math.ceil(r.time);
     this.clockRunning = !this.stopClock && ((r.kind === 'catch' || r.kind === 'run') && !r.oob || r.kind === 'sack');
     if (r.kind === 'pi') {
@@ -1123,8 +1169,8 @@ export class Game {
     this.ballOn = Math.min(99, this.ballOn - r.yards);
     if (r.yards >= this.toGo) { this.down = 1; this.toGo = Math.min(10, this.ballOn); }
     else { this.down++; this.toGo -= r.yards; }
-    if (this.clock <= 0) { this.clock = 0; return this.gameOver(false, 'TIME EXPIRED'); }
-    if (this.down > 4) return this.gameOver(false, 'TURNOVER ON DOWNS');
+    if (this.clock <= 0) { this.clock = 0; return this.gameOver(this.mode === '1v1' && this.tex > this.ou, 'TIME EXPIRED'); }
+    if (this.down > 4) return this.driveOver('TURNOVER ON DOWNS');
     if (r.yards >= 10 || r.kind === 'catch') this.audio.playMusic('wabash', false, 0.8);
     this.toPresnap();
   }
@@ -1134,15 +1180,16 @@ export class Game {
   private gameOver(win: boolean, why = '') {
     this.state = 'OVER'; this.t = 0;
     this.win = win; this.overReason = why;
-    this.entry = this.stats.att > 0 ? { letters: [0, 0, 0], idx: 0 } : null; this.overT = 0; this.savedRank = -1;
+    this.entry = this.stats.att > 0 && this.mode === 'solo' ? { letters: [0, 0, 0], idx: 0 } : null; this.overT = 0; this.savedRank = -1;
     this.audio.call(win ? 'win' : 'lose', true, 0.8);
     this.h.hud(this);
-    if (win) this.audio.playMusic('eyes_of_texas', false);
+    if (this.mode === '1v1') this.audio.playMusic(this.tex === this.ou ? 'march_grandioso' : this.tex > this.ou ? 'eyes_of_texas' : 'boomer_sooner', false);
+    else if (win) this.audio.playMusic('eyes_of_texas', false);
     else { this.audio.play('crowd_boo', 0.6, 1, 'crowd'); if (why !== 'INTERCEPTED') this.audio.playMusic('boomer_sooner', false); }
     if (!this.replay) this.w.jumboLive();
     this.clip = null;
     if (this.best) {
-      this.state = 'POTG'; this.t = 0; this.replay = null; this.w.jumboLive();
+      this.state = 'POTG'; this.t = 0; this.replay = null; this.w.jumboLive(); this.setPossession(this.best.poss);
       this.w.fpArm.visible = false; this.w.camera.layers.enable(2);
       this.w.camera.fov = 50; this.w.camera.updateProjectionMatrix();
       this.h.screen('none', this);

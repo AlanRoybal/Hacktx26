@@ -194,6 +194,7 @@ addEventListener('keydown', async e => {
     if (e.key === 'Enter' || e.key === ' ') game.pauseSelect();
     return;
   }
+  if (game.state === 'HANDOFF') { if (e.key === 'Enter' || e.key === ' ') game.onTrigger(true); return; }
   if (game.state === 'TITLE') {
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') return game.menuMove(e.key === 'ArrowUp' ? -1 : 1);
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') return game.menuAdjust(e.key === 'ArrowRight' ? 1 : -1);

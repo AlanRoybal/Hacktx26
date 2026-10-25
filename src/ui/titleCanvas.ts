@@ -39,17 +39,28 @@ export function drawTitle(c: CanvasRenderingContext2D, g: Game, kind: 'title' | 
     txt(c, 'STICK / ARROWS TO MOVE · ZR / ENTER TO SELECT · HOME / ESC TO RESUME', cx, 300, `bold 10px ${MONO}`, '#FFB066', 1);
     return;
   }
-  if (kind === 'handoff') return drawHandoff(c, g, txt);
+  if (kind === 'handoff') {
+    c.fillStyle = 'rgba(0,0,0,.6)'; c.fillRect(0, 0, UI_W, UI_H);
+    const tex = g.offTeam === 'tex';
+    txt(c, g.handoffWhy, cx, 54, `bold 14px ${MONO}`, '#FFB066', 4);
+    txt(c, 'SWITCH QBS', cx, 112, `64px ${IMPACT}`, '#FFFFFF', 4, tex ? ORANGE : CRIMSON, 4);
+    txt(c, `PLAYER ${g.qbPlayer}  ·  ${g.offName} QB`, cx, 168, `30px ${IMPACT}`, tex ? ORANGE : '#E03A3C', 3, '#000', 2);
+    const ck = Math.max(0, Math.ceil(g.clock));
+    txt(c, `TEX ${g.tex}   ·   OU ${g.ou}   ·   ${Math.floor(ck / 60)}:${String(ck % 60).padStart(2, '0')} LEFT`, cx, 210, `bold 16px ${MONO}`, CREAM, 3);
+    txt(c, 'HAND OVER THE JOY-CONS', cx, 262, `bold 14px ${MONO}`, CREAM, 3);
+    txt(c, 'ZR / ENTER WHEN READY', cx, 288, `bold 12px ${MONO}`, '#FFB066', 1);
+    return;
+  }
   if (m.page === 'home') {
     txt(c, 'RED RIVER', cx, 92, `86px ${IMPACT}`, ORANGE, 4, CRIMSON, 5);
     txt(c, 'TEXAS VS OKLAHOMA · COTTON BOWL · DALLAS', cx, 148, `bold 14px ${MONO}`, '#FDF9D8', 4);
-    ['START', 'SETTINGS'].forEach((t, i) => item(t, 186 + i * 34, i === m.sel, 230, 26));
-    txt(c, 'STICK / ARROWS TO MOVE · ZR / CLICK / ENTER TO SELECT', cx, 252, `bold 11px ${MONO}`, '#FFB066', 1);
+    ['START', '1V1', 'SETTINGS'].forEach((t, i) => item(t, 178 + i * 30, i === m.sel, 230, 24));
+    txt(c, 'STICK / ARROWS TO MOVE · ZR / CLICK / ENTER TO SELECT', cx, 262, `bold 11px ${MONO}`, '#FFB066', 1);
     const rows = g.board().slice(0, 5);
     if (rows.length) {
-      txt(c, 'LEADERBOARD', cx, 276, `bold 12px ${MONO}`, HOT, 4);
+      txt(c, 'LEADERBOARD', cx, 282, `bold 12px ${MONO}`, HOT, 4);
       rows.forEach((r, i) => txt(c, `${i + 1}  ${r.n.padEnd(3)}  ${r.r.toFixed(1).padStart(5)}  ${String(r.yds).padStart(3)} YDS${r.win ? ' · W' : '    '}`,
-        cx, 294 + i * 14, `bold 12px ${MONO}`, CREAM, 0));
+        cx, 298 + i * 13, `bold 12px ${MONO}`, CREAM, 0));
     }
   } else {
     txt(c, 'SETTINGS', cx, 62, `60px ${IMPACT}`, '#FFFFFF', 4, ORANGE, 4);
@@ -60,5 +71,3 @@ export function drawTitle(c: CanvasRenderingContext2D, g: Game, kind: 'title' | 
   }
 }
 
-export let drawHandoff = (_c: CanvasRenderingContext2D, _g: Game, _t: typeof txt) => {};
-export const setHandoff = (f: typeof drawHandoff) => { drawHandoff = f; };

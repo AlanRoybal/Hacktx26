@@ -25,6 +25,13 @@ export const DEF_NUM: Record<DefPos, number> = { DE1: 44, DT1: 0, DT2: 55, DE2: 
 export const DEF_NAME: Record<DefPos, string> = { DE1: 'WEIN', DT1: 'STONE', DT2: 'SAILI', DE2: 'ADEBAWORE', LB1: 'LEWIS', LB2: 'MOORE',
   CB1: 'GUILLORY', CB2: 'JOHNSON', NB: 'ROBINSON', S1: 'BOWEN', S2: 'BOGANOWSKI' };
 export const QB_NAME = 'MANNING';
+// 1v1: Oklahoma on offense, Texas on defense (official 2026 rosters)
+export const OU_OFF_NUM: Record<OffPos, number> = { LT: 72, LG: 74, C: 64, RG: 52, RT: 76, TE: 88, WR1: 1, WR2: 3, WR3: 4, RB: 6 };
+export const OU_OFF_NAME: Record<OffPos, string> = { LT: 'HINTON', LG: 'AFALAVA', C: 'HUTTON', RG: 'BEST', RT: 'HARRIS',
+  TE: 'VAN DORSELAER', WR1: 'SATEGNA', WR2: 'LIVINGSTONE', WR3: 'ODOM', RB: 'BLAYLOCK' };
+export const TEX_DEF_NUM: Record<DefPos, number> = { DE1: 1, DT1: 15, DT2: 93, DE2: 92, LB1: 3, LB2: 16, CB1: 5, CB2: 2, NB: 0, S1: 11, S2: 6 };
+export const TEX_DEF_NAME: Record<DefPos, string> = { DE1: 'SIMMONS', DT1: 'TERRY', DT2: 'KANU', DE2: 'VASEK', LB1: 'BILES', LB2: 'ATKINSON',
+  CB1: 'MASCOE', CB2: 'WILLIAMS', NB: 'MEREDITH', S1: 'MATTHEWS', S2: 'BLACK' };
 export const DEF_SPOT: Record<DefPos, [number, number]> = {
   DE1: [-3.8, 1.0], DT1: [-1.0, 0.9], DT2: [1.0, 0.9], DE2: [3.8, 1.0], LB1: [-2.6, 5], LB2: [2.6, 5],
   CB1: [-21, 6], CB2: [20, 6], NB: [-12, 5], S1: [-9, 13], S2: [9, 13],
