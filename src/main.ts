@@ -131,6 +131,11 @@ function frame(now: number) {
     if (b.stickClick && !prev.stickClick && game.state === 'POCKET') game.scrambleReq = true;
     (p as any)._btn = { ...b };
   }
+  if (game.state === 'OVER' && !game.entry && joy.connected() && joy.active) {
+    const sx = joy.active.stick[0], J = joy as any;
+    if (Math.abs(sx) > 0.7 && !J._oflick) { J._oflick = true; game.overMove(sx > 0 ? 1 : -1); }
+    if (Math.abs(sx) < 0.3) J._oflick = false;
+  }
   if (game.state === 'TITLE' && joy.connected() && joy.active) {
     const [sx, sy] = joy.active.stick, J = joy as any;
     if (Math.abs(sy) > 0.7 && !J._mflick) { J._mflick = true; game.menuMove(sy > 0 ? -1 : 1); }
@@ -213,6 +218,10 @@ addEventListener('keydown', async e => {
     return;
   }
   if (game.state === 'HANDOFF') { if (e.key === 'Enter' || e.key === ' ') game.onTrigger(true); return; }
+  if (game.state === 'OVER' && !game.entry) {
+    if (e.key.startsWith('Arrow')) return game.overMove(e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 1);
+    if (e.key === 'Enter' || e.key === ' ') return game.onTrigger(true);
+  }
   if (game.state === 'TITLE') {
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') return game.menuMove(e.key === 'ArrowUp' ? -1 : 1);
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') return game.menuAdjust(e.key === 'ArrowRight' ? 1 : -1);

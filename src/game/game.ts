@@ -158,14 +158,15 @@ export class Game {
     this.audio.ctx.resume();
     this.h.screen(this.state === 'HANDOFF' ? 'handoff' : 'none', this);
   }
-  pauseMove(d: number) { if (this.paused) { this.pauseSel = (this.pauseSel + d + 3) % 3; this.h.screen('pause', this); } }
+  pauseMove(d: number) { if (this.paused) { this.pauseSel = (this.pauseSel + d + 2) % 2; this.h.screen('pause', this); } }
   pauseSelect() {
     if (!this.paused) return;
-    if (this.pauseSel === 2) return this.quitApp();
     const end = this.pauseSel === 1;
     this.resume();
     if (end) this.endGame();
   }
+  overSel = 0;
+  overMove(d: number) { if (this.state === 'OVER' && !this.entry) { this.overSel = (this.overSel + d + 2) % 2; this.h.screen('over', this); } }
   quitApp() { const rr = (window as any).rr; if (rr?.quit) rr.quit(); else window.close(); }
   endGame() { this.gameOver(this.tex > this.ou, 'GAME ENDED'); }
   onSettings: (s: Game['settings']) => void = () => {};
@@ -497,7 +498,7 @@ export class Game {
     if (down && this.state === 'OVER' && this.entry) { if (this.t > 1.3) this.entryConfirm(); return; }
     if (down && this.state === 'INTRO') { if (this.t > 1) { this.audio.stopVoice(); this.start(); } return; }
     if (down && this.state === 'TITLE') { if (this.t > 0.4) this.menuSelect(); return; }
-    if (down && this.state === 'OVER' && this.t > Math.max(2, this.overT + 1)) { this.toTitle(); return; }
+    if (down && this.state === 'OVER' && this.t > Math.max(2, this.overT + 1)) { if (this.overSel === 1) this.quitApp(); else this.toTitle(); return; }
     if (down && this.state === 'PRESNAP' && this.t > 0.6) this.snap();
     if (down && this.state === 'CUTSCENE' && this.t > 1.5) this.t = 99;
     if (down && this.state === 'OPP' && this.t > 1) this.t = Math.max(this.t, this.oppNext?.result.startsWith('~') ? 99 : 2.4);
@@ -1414,6 +1415,7 @@ export class Game {
   overReason = '';
   win = false;
   private gameOver(win: boolean, why = '') {
+    this.overSel = 0;
     this.state = 'OVER'; this.t = 0;
     this.h.plays(this.playIdx, false);
     this.win = win; this.overReason = why;

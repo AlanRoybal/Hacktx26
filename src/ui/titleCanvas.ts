@@ -35,7 +35,7 @@ export function drawTitle(c: CanvasRenderingContext2D, g: Game, kind: 'title' | 
     txt(c, `TEX ${g.tex}   ·   OU ${g.ou}`, cx, 140, `30px ${IMPACT}`, ORANGE, 3, CRIMSON, 2);
     const ck = Math.max(0, Math.ceil(g.clock));
     txt(c, `${['', '1ST', '2ND', '3RD', '4TH'][Math.min(4, g.down)]} & ${g.toGo >= g.ballOn ? 'GOAL' : g.toGo}  ·  ${Math.floor(ck / 60)}:${String(ck % 60).padStart(2, '0')} LEFT`, cx, 172, `bold 14px ${MONO}`, CREAM, 3);
-    ['CONTINUE', 'END GAME', 'EXIT GAME'].forEach((t, i) => item(t, 206 + i * 30, i === g.pauseSel, 230, 24));
+    ['CONTINUE', 'END GAME'].forEach((t, i) => item(t, 214 + i * 34, i === g.pauseSel, 230, 26));
     txt(c, 'STICK / ARROWS TO MOVE · ZR / ENTER TO SELECT · HOME / ESC TO RESUME', cx, 300, `bold 11px ${MONO}`, '#FFB066', 0);
     return;
   }

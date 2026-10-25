@@ -82,7 +82,7 @@ export function makeHud(buzz: (ms: number, amp?: number) => void, rumble: Hooks[
              <p class="still">STICK UP / DOWN · ZR TO LOCK IN (OR TYPE)</p></div>`
           : boardHtml(g.board(), g.savedRank, 10);
         el.innerHTML = `<div class="big">${g.tex === g.ou ? 'TIE GAME' : g.tex > g.ou ? 'TEXAS WINS' : 'OKLAHOMA WINS'}</div><h2>TEX ${g.tex} - OU ${g.ou}</h2>
-          <div class="row">${card}${right}${clipHtml(g)}</div>${e ? '' : '<p>HOLD ZR (OR CLICK) TO PLAY AGAIN</p>'}`;
+          <div class="row">${card}${right}${clipHtml(g)}</div>${e ? '' : `<p class="opts">${['PLAY AGAIN', 'EXIT GAME'].map((t, i) => `<span class="${i === g.overSel ? 'sel' : ''}">${t}</span>`).join('')}</p><p class="still">STICK / ARROWS TO CHOOSE · ZR / CLICK / ENTER TO SELECT</p>`}`;
       }
       el.classList.add('on');
     },
