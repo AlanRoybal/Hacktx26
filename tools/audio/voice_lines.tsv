@@ -1,0 +1,38 @@
+file	voice	line
+booth_a	Brian	Good evening, and welcome to the Cotton Bowl! It's the Red River Rivalry, Texas and Oklahoma, under the lights in Dallas!
+booth_b	Roger	And here come the Longhorns, right out of the smoke! Listen to this place, it is shaking!
+booth_c	Brian	Fireworks over Fair Park, and a sellout crowd split right down the fifty.
+booth_d	Roger	Tonight it comes down to the quarterback's arm. Let's play some football!
+bigtex_howdy	Bill	Howdy, folks! Welcome to the State Fair of Texas!
+qb_cadence_0	Harry	Blue eighty! Blue eighty! Set... Hut!
+qb_cadence_1	Harry	Omaha! Omaha! Ready... Set... Hut!
+qb_cadence_2	Harry	White twenty-two! White twenty-two! Set, hut!
+qb_cadence_3	Harry	Black forty! Black forty! Hut, hut!
+call_td_0	Brian	He's in! Touchdown! The Cotton Bowl explodes!
+call_td_1	Brian	Fires it into the end zone... caught! Touchdown!
+call_td_2	Roger	Oh, what a throw! Right on the money, and that's six!
+call_int_0	Brian	Intercepted! Picked off, and the defense has it!
+call_int_1	Roger	Oh, he never saw that defender. That's a costly pick.
+call_sack_0	Brian	Pressure... and he's sacked! Brought down hard!
+call_sack_1	Roger	Nowhere to go! The pocket collapsed and they got him.
+call_big_0	Brian	Deep shot... caught! A huge gain, and the crowd is on its feet!
+call_big_1	Roger	That's a big-time throw! Dropped it right in the bucket!
+call_catch_0	Brian	Quick throw, and it's complete.
+call_catch_1	Brian	Caught for a nice gain.
+call_first_0	Brian	And that'll move the chains. First down!
+call_first_1	Roger	Moving the sticks! First down.
+call_drop_0	Brian	Right through his hands! Dropped!
+call_drop_1	Roger	Oh, he's got to catch that one. That's right on him.
+call_pbu_0	Brian	Broken up! Great play in coverage!
+call_pbu_1	Roger	The defender gets a hand in there and knocks it away.
+call_inc_0	Brian	The pass falls incomplete.
+call_flag_0	Brian	Hold on, there's a flag on the play.
+call_fourth_0	Brian	Fourth down. This is the play of the game right here.
+call_fourth_1	Roger	Fourth down, and they're going for it! Gutsy call!
+call_final_0	Brian	Final seconds ticking away... it all comes down to this!
+call_scramble_0	Brian	He's out of the pocket! Scrambling!
+call_timeout_0	Brian	And that's a timeout on the field.
+call_spike_0	Brian	He spikes it to stop the clock.
+call_intro_0	Brian	Here we go, from the Cotton Bowl. It's Red River Saturday!
+call_win_0	Brian	And that's the ballgame! What a night in Dallas!
+call_lose_0	Roger	That one's going to sting. A tough night at the Cotton Bowl.
