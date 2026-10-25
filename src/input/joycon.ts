@@ -34,7 +34,7 @@ export class JoyCon {
   /** stick rest center (learned from the first reports) and reach per direction: +x, -x, +y, -y */
   private sc = [2048, 2048];
   private scN = 0;
-  private sr = [1100, 1100, 1100, 1100];
+  private sr = [1400, 1400, 1400, 1400];
   isLeft: boolean;
 
   constructor(public dev: HIDDevice, private emit: (jc: JoyCon, s: Sample) => void) {

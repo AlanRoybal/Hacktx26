@@ -181,7 +181,7 @@ function updateUi() {
   const clockTools = game.clockRunning ? `  ·  ${jc ? (L ? 'DOWN' : 'A') : 'S'} = SPIKE  ·  ${jc ? (L ? '−' : '+') : 'T'} = TIMEOUT (${game.timeouts})` : '';
   const show = hintOn(s);
   setHint(!show ? '' : s === 'PRESNAP' ? `HOLD ${trig} TO HIKE  ·  ${mode === 'joycon' ? 'STICK' : '← →'} TO CHANGE PLAY${clockTools}`
-    : s === 'POCKET' ? `${mode === 'joycon' ? 'STICK TO MOVE  ·  THROW, RELEASE ' + trig + ' AT THE TOP  ·  PUSH STICK UP TO RUN' : 'ARROWS TO MOVE  ·  AIM, FLICK UP, RELEASE  ·  HOLD UP TO RUN'}` : '');
+    : s === 'POCKET' ? `${mode === 'joycon' ? 'STICK TO MOVE  ·  HOLD ' + trig + ', THROW, RELEASE AT THE TOP  ·  HOLD STICK UP TO SCRAMBLE' : 'ARROWS TO MOVE  ·  AIM, FLICK UP, RELEASE  ·  HOLD UP TO RUN'}` : '');
   setPill(joy.connected(), joy.connected() ? `JOY-CON (${joy.active?.isLeft ? 'L' : 'R'}) ${joy.active?.battery ?? ''}` : joy.reconnecting() ? 'RECONNECTING JOY-CON  ·  PRESS ANY BUTTON' : 'MOUSE  ·  ENTER = CONNECT JOY-CON');
   setCross(innerWidth * (mouse.aimX + 1) / 2, innerHeight * (1 - mouse.aimY) / 2, mode === 'mouse' && s === 'POCKET');
   if (debug) {

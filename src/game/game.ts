@@ -344,6 +344,8 @@ export class Game {
   hands: Record<number, 'L' | 'R' | undefined> = {};
   pickN = 0;
   padSide: () => 'L' | 'R' | undefined = () => undefined;
+  trigHeld = false;
+  private cockK = 0;
   /** connected Joy-Cons for the pause screen: battery 0 (empty) .. 4 (full) */
   padBatteries: () => { side: 'L' | 'R'; level: number; charging: boolean }[] = () => [];
   setHand: (h: 'auto' | 'L' | 'R') => void = () => {};
@@ -492,6 +494,7 @@ export class Game {
   }
 
   onTrigger(down: boolean) {
+    this.trigHeld = down;
     if (this.paused) { if (down) this.pauseSelect(); return; }
     if (down && this.state === 'HANDOFF') { if (this.t > 1) this.endHandoff(); return; }
     if (down && this.state === 'POTG') { if (this.t > 2) this.endPotg(); return; }
@@ -563,7 +566,8 @@ export class Game {
 
   // ---------- throw ----------
   onThrow(e: ThrowEvent, groundAim?: THREE.Vector3) {
-    if (this.state !== 'POCKET') return;
+    const onRun = this.state === 'SCRAMBLE';
+    if (this.state !== 'POCKET' && !(onRun && this.scr.pos.z < this.losZ - 0.3)) return;
     const hand = this.handPos();
     let yaw = THREE.MathUtils.degToRad(e.yawDeg) + this.camYaw();
     let th = THREE.MathUtils.degToRad(e.launchDeg);
@@ -578,6 +582,7 @@ export class Game {
     const q = releaseQuality(e.source === 'auto' ? 0 : e.timingMs);
     yaw += THREE.MathUtils.degToRad((this.rng() - 0.5) * 16 * (1 - q));
     th += THREE.MathUtils.degToRad((e.timingMs > 0 ? -6 : 6) * (1 - q));
+    if (onRun) yaw += THREE.MathUtils.degToRad((this.rng() - 0.5) * 8);
     const wobble = Math.max(e.wobble, (1 - q) * 0.45);
     // aim assist: receiver whose lead point is nearest the raw throw
     const rawR = rangeOf(v, th, hand.y - 1.3);
@@ -599,7 +604,7 @@ export class Game {
       if (dYaw < THREE.MathUtils.degToRad(18) && dR < (over ? 1.7 : 0.8) && (!best || score < best.score)) best = { a, score, p: lead, v: sol.v, th: sol.th, yaw: ay };
     }
     if (best) {
-      const k = this.assist * (0.3 + 0.7 * q);
+      const k = this.assist * (0.3 + 0.7 * q) * (onRun ? 0.7 : 1);
       yaw = yaw + Math.atan2(Math.sin(best.yaw - yaw), Math.cos(best.yaw - yaw)) * k;
       const kR = rawR > rangeOf(best.v, best.th, hand.y - 1.3) ? Math.min(1, 0.25 + k * 1.5) : k;
       th = th + (best.th - th) * kR;
@@ -899,17 +904,20 @@ export class Game {
 
   private pocket(dt: number) {
     const drop = Math.min(1, this.t / 0.8);
-    this.qbOff.x = THREE.MathUtils.clamp(this.qbOff.x - this.stick[0] * 2.6 * dt, -2.2, 2.2);
-    this.qbOff.y = THREE.MathUtils.clamp(this.qbOff.y + this.stick[1] * 2.0 * dt, -1.4, 1.0);
-    const moving = Math.hypot(this.stick[0], this.stick[1]) > 0.2;
+    const [sx, sy] = this.stickDz();
+    this.qbOff.x = THREE.MathUtils.clamp(this.qbOff.x - sx * 2.6 * dt, -2.2, 2.2);
+    this.qbOff.y = THREE.MathUtils.clamp(this.qbOff.y + sy * 2.0 * dt, -1.4, 1.0);
+    const moving = sx !== 0 || sy !== 0;
     this.w.camera.position.set(this.qb.x + this.qbOff.x, this.qb.y + Math.sin(this.t * (moving ? 11 : 9)) * (moving ? 0.035 : 0.02 * (1 - drop)),
       this.qb.z - 1.4 * drop + this.qbOff.y);
     if (this.rng() < dt * 1.5) this.sfx(this.rng() < 0.5 ? 'grunt' : 'grunt2', new THREE.Vector3((this.rng() - 0.5) * 6, 1, this.losZ), 0.45);
     this.pressure = THREE.MathUtils.clamp(1 - (this.sackT - this.playT) / 1.5, 0, 1);
     const hr = 1.4 + 2 * this.pressure, pr = this.pressure;
     if (pr > 0 && Math.floor((this.t - dt) * hr) !== Math.floor(this.t * hr)) this.h.rumble([[45, 0.35 + 0.5 * pr, 90], [80, 0, 90], [40, 0.25 + 0.4 * pr, 75]]);
-    this.fwdHold = this.stick[1] > 0.75 && this.qbOff.y >= 0.95 ? this.fwdHold + dt : 0;
-    if (this.fwdHold > 0.35 || this.scrambleReq) { this.scrambleReq = false; return this.startScramble(); }
+    // scramble: hold the stick firmly forward, or firmly sideways once at the edge of the pocket
+    const out = this.stick[1] > 0.85 || (Math.abs(this.stick[0]) > 0.85 && Math.abs(this.qbOff.x) > 2.1);
+    this.fwdHold = out ? this.fwdHold + dt : 0;
+    if (this.fwdHold > 0.4 || this.scrambleReq) { this.scrambleReq = false; return this.startScramble(); }
     const r = this.def.get(this.rusher)!;
     const cam = this.w.camera.position;
     const dr = Math.hypot(r.pos.x - cam.x, r.pos.z - cam.z);
@@ -1278,17 +1286,15 @@ export class Game {
     }
     if (s !== 'POCKET') return;
     if (this.w.fpBall) this.w.fpBall.visible = true;
-    // hand orientation drives the arm; tipping the hand back cocks the ball up beside the helmet
+    // holding the trigger cocks the ball straight up beside the helmet; the hand only nudges the heading
+    this.cockK = THREE.MathUtils.damp(this.cockK, this.trigHeld ? 1 : 0, 12, dt);
+    const cock = this.cockK;
     const e = new THREE.Euler().setFromQuaternion(this.handQ, 'YXZ');
-    const cock = THREE.MathUtils.clamp(e.x / 1.1, 0, 1);
-    const yaw = THREE.MathUtils.clamp(e.y, -0.7, 0.7);
-    const breathe = Math.sin(this.t * 2.2) * 0.004;
+    const yaw = THREE.MathUtils.clamp(e.y, -0.7, 0.7) * 0.15;
     const tp = new THREE.Vector3().lerpVectors(ARM_REST, ARM_COCK, cock);
-    tp.x -= 0.12 * yaw; tp.y += breathe;
-    // cocked: ball lifts and tips back a little; the arm keeps its rest heading so the elbow stays low and in
-    const hq = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.min(0, e.x) * 0.5, yaw * 0.35, e.z * 0.25 * (1 - cock), 'YXZ'));
-    const cq = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw * 0.35).multiply(COCK_Q);
-    const tq = hq.slerp(cq, cock);
+    tp.y += Math.sin(this.t * 2.2) * 0.004;
+    const tq = new THREE.Quaternion().slerpQuaternions(new THREE.Quaternion(), COCK_Q, cock)
+      .premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw));
     const k = Math.min(1, dt * 28);
     A.position.lerp(tp, k);
     A.quaternion.slerp(tq, k);
@@ -1490,6 +1496,8 @@ export class Game {
     this.qbA.play('Throw', 0.05, 1.4, true); this.qbA.data.thrown = true;
   }
 
+  private stickDz() { return this.stick.map(v => (Math.abs(v) < 0.25 ? 0 : (v - Math.sign(v) * 0.25) / 0.75)); }
+
   private startScramble() {
     this.state = 'SCRAMBLE'; this.t = 0;
     this.scr.pos.copy(this.w.camera.position).setY(0); this.scr.vel.set(0, 0, 0);
@@ -1626,7 +1634,7 @@ export class Game {
     const c = this.w.camera.position;
     q.pos.set(c.x, 0, c.z); q.heading = this.camYaw();
     if (q.data.thrown) return;
-    const moving = s === 'POCKET' && Math.hypot(this.stick[0], this.stick[1]) > 0.2;
+    const moving = s === 'POCKET' && this.stickDz().some(v => v !== 0);
     q.play(moving ? 'Run' : 'QBSet', 0.2, moving ? 0.7 : 1);
   }
 
@@ -1751,15 +1759,16 @@ export class Game {
 }
 
 const ARM_REST = new THREE.Vector3(0.25, -0.17, -0.7);
-const ARM_COCK = new THREE.Vector3(0.22, -0.08, -0.56);
-const COCK_Q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.35, 0, 0));
+const ARM_COCK = new THREE.Vector3(0.25, 0.0, -0.52);
+const COCK_Q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.5, 0, 0));
 type ArmKey = { t: number; p: THREE.Vector3; q: THREE.Quaternion };
 const armKey = (t: number, p: [number, number, number], r: [number, number, number]): ArmKey =>
   ({ t, p: new THREE.Vector3(...p), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(r[0], r[1], r[2], 'YXZ')) });
 // release -> whip over the top -> pronated follow-through across the body to the left hip
-const THROW_KEYS: ArmKey[] = [armKey(0, [0, 0, 0], [0, 0, 0]), armKey(0.06, [0.16, 0.03, -0.92], [-0.25, 0.1, -0.35]),
-  armKey(0.15, [0.03, -0.2, -0.82], [-0.9, 0.35, -0.9]), armKey(0.3, [-0.2, -0.48, -0.62], [-1.35, 0.6, -1.25]),
-  armKey(0.5, [-0.3, -0.9, -0.5], [-1.5, 0.6, -1.3])];
+// over the top: forward and up to the release, then straight down the front
+const THROW_KEYS: ArmKey[] = [armKey(0, [0, 0, 0], [0, 0, 0]), armKey(0.06, [0.22, 0.05, -0.86], [-0.3, 0, -0.04]),
+  armKey(0.15, [0.17, -0.22, -0.82], [-0.95, 0.04, -0.08]), armKey(0.3, [0.1, -0.55, -0.66], [-1.35, 0.06, -0.12]),
+  armKey(0.5, [0.05, -0.95, -0.5], [-1.5, 0.06, -0.15])];
 const PUMP_KEYS: ArmKey[] = [armKey(0, [0, 0, 0], [0, 0, 0]), armKey(0.09, [0.2, -0.02, -0.86], [-0.2, 0.05, -0.15]),
   armKey(0.28, [0.25, -0.17, -0.7], [0, 0, 0])];
 
