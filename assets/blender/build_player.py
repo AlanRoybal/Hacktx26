@@ -468,7 +468,7 @@ def actions():
     # officials' signals
     up = {'upperarm_L': (-178, -6, 0), 'upperarm_R': (-178, 6, 0), 'forearm_L': (0, 0, 0), 'forearm_R': (0, 0, 0), 'hand_L': (0, 0, 0), 'hand_R': (0, 0, 0)}
     A['RefTD'] = (False, {0: rest, 8: P(rest, up, {'loc': (0, 0, 0.02)}), 30: P(rest, up), 40: P(rest, up, {'neck': (-5, 0, 0)})})
-    wo = lambda k: {'upperarm_L': (-88, -62 + 85 * k, 0), 'upperarm_R': (-88, 62 - 85 * k, 0), 'forearm_L': (-5, 0, 0), 'forearm_R': (-5, 0, 0)}
+    wo = lambda k: {'upperarm_L': (-88, 0, 60 - 100 * k), 'upperarm_R': (-88, 0, -60 + 100 * k), 'forearm_L': (-5, 0, 0), 'forearm_R': (-5, 0, 0)}
     A['RefIncomplete'] = (True, {0: P(rest, wo(0)), 8: P(rest, wo(1)), 16: P(rest, wo(0)), 24: P(rest, wo(1)), 32: P(rest, wo(0))})
     point = {'upperarm_R': (-92, 0, 0), 'forearm_R': (-2, 0, 0), 'hand_R': (0, 0, 0), 'chest': (0, 0, 12), 'neck': (-4, 0, -10)}
     A['RefFirstDown'] = (False, {0: rest, 8: P(rest, point), 34: P(rest, point, {'upperarm_R': (-96, 0, 0)})})

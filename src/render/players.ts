@@ -70,7 +70,8 @@ export class Actor {
       const m = o as THREE.SkinnedMesh;
       if ((o as THREE.Bone).isBone) this.bones.push(o);
       if (!m.isMesh) return;
-      if ((team === 'ref' || team === 'coach') && HIDE_MESH.has(m.name)) { m.visible = false; return; }
+      const meshName = (n?: string) => (n ?? '').replace(/_\d+$/, '');
+      if ((team === 'ref' || team === 'coach') && (HIDE_MESH.has(meshName(m.name)) || HIDE_MESH.has(meshName(m.parent?.name)))) { m.visible = false; return; }
       m.castShadow = true;
       m.frustumCulled = false;
       const swap = (mat: THREE.Material) => {
