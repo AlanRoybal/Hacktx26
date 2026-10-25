@@ -1,5 +1,6 @@
 import type { Game, Hooks, BoardRow } from '../game/game';
 import { PLAYS, OFF_SPOT, type OffPos } from '../game/plays';
+import { drawTitle } from './titleCanvas';
 
 const $ = (id: string) => document.getElementById(id)!;
 const ORD = ['', '1ST', '2ND', '3RD', '4TH'];
@@ -16,8 +17,6 @@ function routeSvg(i: number) {
   }
   return s + '</svg>';
 }
-
-const bar = (n: number) => '■'.repeat(n) + '□'.repeat(10 - n);
 
 function boardHtml(rows: BoardRow[], me: number, n = 5) {
   if (!rows.length) return '';
@@ -55,20 +54,10 @@ export function makeHud(buzz: (ms: number, amp?: number) => void, rumble: Hooks[
     screen(kind, g) {
       const el = $('screen');
       $('scorebug').style.display = kind === 'title' ? 'none' : 'flex';
+      g.w.showUI(false);
       if (kind === 'none') { el.classList.remove('on'); return; }
-      if (kind === 'title') {
-        const m = g.menu, st = g.settings;
-        const val = (r: string) => ({ QUALITY: st.quality.toUpperCase(), MUSIC: bar(st.music), ANNOUNCERS: bar(st.voice), CROWD: bar(st.crowd),
-          'THROWING HAND': st.hand === 'auto' ? 'AUTO' : st.hand === 'R' ? 'RIGHT' : 'LEFT' } as Record<string, string>)[r] ?? '';
-        el.innerHTML = m.page === 'home'
-          ? `<h1>RED RIVER</h1><h2>TEXAS VS OKLAHOMA · COTTON BOWL · DALLAS</h2>
-             <div class="menu">${['START', 'SETTINGS'].map((t, i) => `<div class="mi ${i === m.sel ? 'sel' : ''}">${t}</div>`).join('')}</div>
-             <p class="still">STICK / ARROWS TO MOVE · ZR / CLICK / ENTER TO SELECT</p>${boardHtml(g.board(), -1)}`
-          : `<div class="big">SETTINGS</div><div class="menu set">${(g.constructor as any).SETTINGS_ROWS.map((r: string, i: number) =>
-              `<div class="mi ${i === m.sel ? 'sel' : ''}"><span>${r}</span><b>${val(r) ? '◀ ' + val(r) + ' ▶' : ''}</b></div>`).join('')}</div>
-             <p class="still">UP / DOWN TO PICK · LEFT / RIGHT TO CHANGE · ZR TO SELECT</p>`;
-      }
-      else {
+      if (kind === 'title') { el.classList.remove('on'); drawTitle(g.w.uiCtx, g); g.w.showUI(true); return; }
+      {
         const s = g.stats;
         const card = `<table><tr><td>COMP / ATT</td><td>${s.comp} / ${s.att}</td></tr><tr><td>PASS YDS</td><td>${s.yds}</td></tr>
           <tr><td>TD / INT</td><td>${s.td} / ${s.int}</td></tr><tr><td>SACKS</td><td>${s.sacks}</td></tr><tr><td>LONGEST</td><td>${s.long} YDS</td></tr>

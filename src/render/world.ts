@@ -28,10 +28,11 @@ export function loadTex(n: string, repeat = false) {
 function makePost() {
   const mat = new THREE.ShaderMaterial({
     uniforms: { tScene: { value: null }, uTime: { value: 0 }, uPressure: { value: 0 }, uFlash: { value: 0 }, uDaze: { value: 0 },
-      uRes: { value: new THREE.Vector2(INTERNAL_W, INTERNAL_H) }, uPixel: { value: 1 } },
+      uRes: { value: new THREE.Vector2(INTERNAL_W, INTERNAL_H) }, uPixel: { value: 1 }, tUI: { value: null }, uUI: { value: 0 },
+      uUIRes: { value: new THREE.Vector2(640, 360) } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }',
     fragmentShader: `
-      uniform sampler2D tScene; uniform float uTime, uPressure, uFlash, uPixel, uDaze; uniform vec2 uRes; varying vec2 vUv;
+      uniform sampler2D tScene, tUI; uniform float uTime, uPressure, uFlash, uPixel, uDaze, uUI; uniform vec2 uRes, uUIRes; varying vec2 vUv;
       float bayer(vec2 p){ int x=int(mod(p.x,4.)), y=int(mod(p.y,4.)); int i=x+y*4;
         int m[16]=int[16](0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5); return float(m[i])/16.-.5; }
       float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
@@ -41,6 +42,22 @@ function makePost() {
           vec3 c2 = texture2D(tScene, vUv + vec2(.018, .006) * uDaze * (1. + .4*sin(uTime*7.))).rgb;
           c = mix(c, (c + c2) * .5, uDaze);
           c = mix(c, vec3(dot(c, vec3(.3,.59,.11))), uDaze * .6);
+        }
+        if (uUI > .5) {   // menu UI: chunky pixels, eroded print, row tear, then the same dither and grain as the scene
+          vec2 d0 = vUv - .5;
+          c *= mix(.7, .22, smoothstep(.0, .7, length(d0)));
+          vec2 q = floor(vUv * uUIRes);
+          float row = q.y, tear = step(.992, h(vec2(row * .37, floor(uTime * 9.))));
+          q.x += tear * floor((h(vec2(row, floor(uTime * 9.))) - .5) * 14.);
+          vec4 u = texture2D(tUI, (q + .5) / uUIRes);
+          float wear = h(floor(q / 2.) + 7.3), scratch = step(.985, h(vec2(floor(q.x / 1.), floor(q.y / 40.))));
+          float a = step(.4, u.a) * step(.09, wear) * (1. - scratch * .8);
+          vec3 uc = u.rgb / max(u.a, .001);
+          uc *= .82 + .18 * h(floor(q / 3.) + 1.7);
+          uc *= .9 + .1 * mod(q.y, 2.);
+          vec4 ur = texture2D(tUI, (q + vec2(1.5, .5)) / uUIRes);
+          c += vec3(.35, 0., 0.) * step(.4, ur.a) * (1. - a) * .6;
+          c = mix(c, uc, a);
         }
         if (uPixel > .5) {
           vec2 px = floor(vUv*uRes);
@@ -73,6 +90,10 @@ export class World {
   camera = new THREE.PerspectiveCamera(72, 16 / 9, 0.05, 600);
   rt = new THREE.WebGLRenderTarget(INTERNAL_W, INTERNAL_H, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, samples: 0 });
   post = makePost();
+  uiCanvas = Object.assign(document.createElement('canvas'), { width: 640, height: 360 });
+  uiCtx = this.uiCanvas.getContext('2d')!;
+  uiTex = (() => { const t = new THREE.CanvasTexture(this.uiCanvas); t.minFilter = t.magFilter = THREE.NearestFilter; t.generateMipmaps = false; t.premultiplyAlpha = false; return t; })();
+  showUI(on: boolean) { this.post.mat.uniforms.uUI.value = on ? 1 : 0; this.post.mat.uniforms.tUI.value = this.uiTex; if (on) this.uiTex.needsUpdate = true; }
   // jumbotron: second camera into its own target, shown on the 'screen' mesh
   jumboCam = new THREE.PerspectiveCamera(30, 16 / 9, 0.5, 400);
   jumboRT = new THREE.WebGLRenderTarget(512, 288);
