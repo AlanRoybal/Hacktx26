@@ -394,6 +394,7 @@ export class Game {
     this.w.clearFx();
     this.audio.start();
     this.resetDrive();
+    if (this.state === 'INTRO') this.state = 'PRESNAP';
     this.h.screen('none', this);
     this.audio.playMusic('wabash', false);
     if (!this.fromIntro) this.audio.call('intro', true, 0.6);

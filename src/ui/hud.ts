@@ -61,7 +61,7 @@ export function makeHud(buzz: (ms: number, amp?: number) => void, rumble: Hooks[
     },
     screen(kind, g) {
       const el = $('screen');
-      $('scorebug').style.display = kind === 'title' ? 'none' : 'flex';
+      $('scorebug').style.display = kind === 'title' || g.state === 'INTRO' ? 'none' : 'flex';
       g.w.showUI(false);
       document.body.classList.toggle('paused', kind === 'pause' || kind === 'handoff');
       document.body.classList.toggle('potg', g.state === 'POTG');
