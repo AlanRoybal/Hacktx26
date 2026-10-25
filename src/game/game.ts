@@ -6,7 +6,7 @@ import type { ThrowEvent } from '../input/types';
 import type { Audio, Clip } from '../audio';
 
 export type State = 'TITLE' | 'INTRO' | 'PRESNAP' | 'SNAP' | 'POCKET' | 'AIR' | 'RUN' | 'SACK' | 'SCRAMBLE' | 'TACKLED' | 'DEAD' | 'CUTSCENE' | 'OVER' | 'POTG' | 'HANDOFF';
-type Result = { kind: 'catch' | 'inc' | 'int' | 'sack' | 'fumble' | 'td' | 'pi' | 'run'; yards: number; time: number; oob?: boolean; why?: string };
+type Result = { kind: 'catch' | 'inc' | 'int' | 'sack' | 'fumble' | 'td' | 'pi' | 'run' | 'fs'; yards: number; time: number; oob?: boolean; why?: string };
 
 export interface Hooks {
   banner(text: string, sub?: string, color?: string): void;
@@ -18,6 +18,7 @@ export interface Hooks {
   rumble(steps: [number, number, number][], both?: boolean): void;
 }
 
+const OL_FLINCH: OffPos[] = ['LT', 'LG', 'RG', 'RT', 'TE'];
 const LIVE: State[] = ['SNAP', 'POCKET', 'AIR', 'RUN', 'SACK', 'SCRAMBLE', 'TACKLED'];
 const REF_SPOT: Record<string, [number, number, number]> = { R: [-4, -12, 0], CJ: [5, -11, 0], HL: [-25.8, 0, Math.PI / 2], LJ: [25.8, 0, -Math.PI / 2], BJ: [0, 24, Math.PI] };
 const grade = (w: number) => (w < 0.08 ? 'A' : w < 0.16 ? 'B' : w < 0.3 ? 'C' : 'DUCK');
@@ -268,11 +269,27 @@ export class Game {
     this.down = 1; this.toGo = 10; this.ballOn = 45; this.clockRunning = false;
     this.setupPlay();
     this.state = 'HANDOFF'; this.t = 0;
+    this.setHand(this.hands[this.qbPlayer] ?? this.settings.hand);
     this.h.hud(this);
     this.h.screen('handoff', this);
   }
   handoffWhy = '';
+  /** 1v1: the Joy-Con each player picked (both can pick the same one and pass it over). */
+  hands: Record<number, 'L' | 'R' | undefined> = {};
+  pickN = 0;
+  padSide: () => 'L' | 'R' | undefined = () => undefined;
+  setHand: (h: 'auto' | 'L' | 'R') => void = () => {};
+  get sharedPad() { return !(this.mode === '1v1' && this.hands[1] && this.hands[2] && this.hands[1] !== this.hands[2]); }
   private endHandoff() {
+    if (this.handoffWhy === 'PICK') {
+      this.hands[this.pickN] = this.padSide();
+      if (this.pickN === 1) { this.pickN = 2; this.t = 0; this.h.screen('handoff', this); return; }
+      this.handoffWhy = ''; this.pickN = 0;
+      this.setHand(this.hands[1] ?? this.settings.hand);
+      this.h.screen('none', this);
+      this.h.banner('TEXAS BALL', 'PLAYER 1 AT QB  ·  SWAP AFTER EVERY DRIVE');
+      return this.toPresnap();
+    }
     this.h.screen('none', this);
     this.h.banner(this.handoffWhy === 'HALFTIME' ? '2ND HALF' : `${this.offName} BALL`, this.handoffWhy === 'HALFTIME' ? `${this.offName} BALL  ·  PLAYER ${this.qbPlayer} AT QB` : `PLAYER ${this.qbPlayer} AT QB`);
     this.audio.playMusic(this.offTeam === 'tex' ? 'wabash' : 'boomer_sooner', false, 0.8);
@@ -287,6 +304,7 @@ export class Game {
   // ---------- flow ----------
   toTitle() {
     this.state = 'TITLE'; this.t = 0; this.menu = { page: 'home', sel: 0 };
+    this.setHand(this.settings.hand);
     this.resetDrive();
     this.setupPlay();
     this.h.screen('title', this);
@@ -308,11 +326,16 @@ export class Game {
     this.audio.start();
     this.resetDrive();
     this.h.screen('none', this);
-    if (this.mode === '1v1') this.h.banner('TEXAS BALL', 'PLAYER 1 AT QB  ·  SWAP AFTER EVERY DRIVE');
-    else this.h.banner('TEXAS BALL', `OU ${this.ballOn}  |  DOWN 4  |  1:45 LEFT`);
     this.audio.playMusic('wabash', false);
     if (!this.fromIntro) this.audio.call('intro', true, 0.6);
     this.fromIntro = false;
+    if (this.mode === '1v1') {
+      this.hands = {}; this.pickN = 1; this.handoffWhy = 'PICK'; this.setHand('auto');
+      this.state = 'HANDOFF'; this.t = 0;
+      this.h.hud(this);
+      return this.h.screen('handoff', this);
+    }
+    this.h.banner('TEXAS BALL', `OU ${this.ballOn}  |  DOWN 4  |  1:45 LEFT`);
     this.toPresnap();
   }
 
@@ -415,7 +438,18 @@ export class Game {
     if (down && this.state === 'SACK' && this.t > 1.6) this.t = 99;
   }
 
+  /** 0..1 how much the moment weighs: close score, late clock, 3rd/4th down, red zone. */
+  get tension() {
+    const m = Math.abs(this.tex - this.ou), close = m <= 3 ? 1 : m <= 8 ? 0.75 : m <= 16 ? 0.35 : 0.1;
+    const late = this.mode === '1v1' ? (this.half === 2 ? 1 - this.clock / 180 : 0.25 * (1 - this.clock / 180)) : 1 - this.clock / 105;
+    const sit = (this.down === 4 ? 0.3 : this.down === 3 ? 0.12 : 0) + (this.ballOn <= 20 ? 0.12 : 0);
+    return THREE.MathUtils.clamp(close * (0.3 + 0.7 * THREE.MathUtils.clamp(late, 0, 1)) + sit, 0, 1);
+  }
+  /** Joy-Con angular speed (deg/s) this frame; a jumpy hand before the snap is a false start. */
+  handJitter = 0;
+  private jitterT = 0;
   snap() {
+    if (this.rng() < 0.11 * this.tension ** 2) return this.falseStart(OL_FLINCH[Math.floor(this.rng() * OL_FLINCH.length)]);
     this.state = 'SNAP'; this.t = 0; this.playT = 0; this.cadT = 0;
     this.rec = []; this.recT = []; this.recAcc = 0; this.replay = null; this.stopClock = false; this.clockRunning = false;
     this.h.plays(this.playIdx, false);
@@ -427,6 +461,27 @@ export class Game {
     this.stats.lastPlay = this.play.name;
     const line = new THREE.Vector3(0, 1, this.losZ);
     setTimeout(() => { this.sfx('hit_pads', line, 0.8); this.sfx('grunt', line, 0.7); this.sfx('grunt2', line.clone().setX(2.5), 0.5); }, 230);
+  }
+
+  private falseStart(pos: OffPos | 'QB') {
+    const who = pos === 'QB' ? this.qbA : this.off.get(pos)!;
+    this.state = 'DEAD'; this.t = 0; this.cadT = 0; this.playT = 0;
+    this.h.plays(this.playIdx, false);
+    this.audio.duck(false);
+    if (pos !== 'QB') { who.pos.z += 0.6; who.play('Block', 0.1, 1.4); }
+    this.audio.play('whistle', 0.8);
+    this.audio.play('crowd_roar', 0.6, 1.05, 'crowd');
+    this.audio.call('flag', true, 0.5);
+    (this.offTeam === 'tex' ? this.spikeOU = Math.max(this.spikeOU, 0.6) : this.spikeTex = Math.max(this.spikeTex, 0.6));
+    this.w.drawJumbo(['FLAG', 'FALSE START'], '#E8C21E', '#111');
+    this.jumboUntil = this.t + 3;
+    this.clockRunning = false;
+    this.refSignal('fs', who.pos);
+    this.h.rumble([[60, 0.6, 250], [60, 0, 0], [60, 0.6, 250]]);
+    const ord = ['', '1ST', '2ND', '3RD', '4TH'][this.down];
+    this.result = { kind: 'fs', yards: -Math.min(5, 99 - this.ballOn), time: 0, why: pos };
+    this.deadHold = 2.6;
+    this.h.banner('FLAG', `FALSE START · ${pos === 'QB' ? `#${this.qbA.number} QB` : `#${who.number} ${who.name}`} · 5 YDS, REPEAT ${ord} DOWN`, '#C9A400');
   }
 
   private sfx(name: Clip, at: THREE.Vector3, gain = 1, rate = 1) {
@@ -567,7 +622,15 @@ export class Game {
       this.w.camera.lookAt(0, 0, 0);
     }
     if (s === 'INTRO') this.intro(dt);
-    if (s === 'PRESNAP') this.presnapIdle();
+    if (s === 'PRESNAP') {
+      this.presnapIdle();
+      // jumpy throwing hand while the line is set: a false start, easier to trip when the game is tight
+      const lim = 1100 - 600 * this.tension;
+      this.jitterT = this.t > 1.2 && this.handJitter > lim ? this.jitterT + dtReal : 0;
+      if (this.jitterT > 0.06) { this.jitterT = 0; this.falseStart('QB'); }
+      const hr = 1.1 + 1.4 * this.tension;
+      if (this.tension > 0.5 && Math.floor((this.t - dt) * hr) !== Math.floor(this.t * hr)) this.h.rumble([[40, 0.2 + 0.35 * this.tension, 90], [80, 0, 90], [35, 0.15 + 0.25 * this.tension, 75]]);
+    }
     if (s === 'PRESNAP' && this.cadT && this.t > this.cadT) {   // QB barks the cadence once the play is set
       this.cadT = 0;
       this.audio.play(`qb_cadence_${Math.floor(this.rng() * 4)}` as Clip, 1.1);
@@ -599,12 +662,14 @@ export class Game {
     if (s === 'OVER' && this.t > 1 && this.t - dt <= 1) this.h.screen('over', this);
     this.w.post.mat.uniforms.uFlash.value *= Math.max(0, 1 - dtReal * 4);
     this.updatePulse(dtReal);
+    this.w.ballFlying = s === 'AIR' || (s === 'POTG' && this.w.football.position.y > 1.5);
     if (s === 'POTG') { this.potg(dtReal); this.w.post.mat.uniforms.uDaze.value = 0; return; }
     this.updateCamera(dt);
     const live = LIVE.includes(s);
     if (live && (this.hudT += dtReal) > 0.2) { this.hudT = 0; this.h.hud(this); }
     const cam = this.w.camera;
-    const fov = this.timeScale < 0.7 && (s === 'AIR' || s === 'RUN') ? 46 : 72;
+    const far = s === 'AIR' ? THREE.MathUtils.clamp((this.ball.pos.distanceTo(cam.position) - 8) / 35, 0, 1) : 0;
+    const fov = this.timeScale < 0.7 && (s === 'AIR' || s === 'RUN') ? 46 : 72 - 20 * far;
     if (Math.abs(cam.fov - fov) > 0.05) { cam.fov += (fov - cam.fov) * Math.min(1, dtReal * 5); cam.updateProjectionMatrix(); }
     if (s !== 'SACK') this.w.post.mat.uniforms.uDaze.value = Math.max(0, this.w.post.mat.uniforms.uDaze.value - dtReal * 0.7);
     this.simQB();
@@ -768,7 +833,7 @@ export class Game {
     this.sackPlayT = this.playT;
     this.coachReact('DropReact');
     this.spikeOU = 0.95;
-    const fumble = this.rng() < 0.12, lost = fumble && this.rng() < 0.5;
+    const fumble = this.rng() < 0.12 + 0.2 * this.tension, lost = fumble && this.rng() < 0.5;
     this.stats.sacks++;
     this.result = { kind: lost ? 'fumble' : 'sack', yards: -7, time: this.playT, why: fumble ? (lost ? 'lost' : 'recovered') : '' };
     this.continueBall = fumble;
@@ -793,7 +858,7 @@ export class Game {
     if (t > 1.0 && fx.hit === 2) {
       fx.hit = 3;
       const k = this.result!.kind, why = this.result!.why;
-      this.h.banner(k === 'fumble' ? 'FUMBLE' : 'SACKED', k === 'fumble' ? 'OKLAHOMA RECOVERS' : why === 'recovered' ? 'TEXAS RECOVERS' : '-7 YARDS', '#841617');
+      this.h.banner(k === 'fumble' ? 'FUMBLE' : 'SACKED', k === 'fumble' ? `${this.defName} RECOVERS` : why === 'recovered' ? `${this.offName} RECOVERS` : '-7 YARDS', '#841617');
     }
     const slide = Math.min(1, t / 0.7);
     const pos = fx.start.clone().addScaledVector(fx.dir, 1.6 * (1 - (1 - slide) ** 2));
@@ -941,6 +1006,21 @@ export class Game {
     this.refSignal('inc', this.ball.pos);
   }
   private continueBall = false;
+  /** Ball pops loose on the hit; defense jumps on it about half the time. */
+  private carrierFumble(c: Actor, yards: number) {
+    const lost = this.rng() < 0.55;
+    this.result = lost ? { kind: 'fumble', yards: 0, time: this.playT, why: 'lost' } : { kind: 'catch', yards, time: this.playT };
+    this.ball.pos.copy(c.pos).setY(1.1); this.ball.vel.set((this.rng() - 0.5) * 5, 3.2, (this.rng() - 0.3) * 4); this.continueBall = true;
+    this.sfx('helmet_hit', c.pos, 1);
+    this.audio.play('crowd_roar', 0.8, 1, 'crowd');
+    this.w.drawJumbo(['FUMBLE!'], '#841617', '#FDF9D8'); this.jumboUntil = this.t + 3;
+    this.h.rumble([[220, 1, 140], [60, 0, 0], [160, 0.6, 90]], true);
+    if (lost) { this.coachReact('DropReact'); (this.offTeam === 'tex' ? this.spikeOU = 0.95 : this.spikeTex = 0.95); }
+    else { this.stats.yds += yards; this.stats.long = Math.max(this.stats.long, yards); }
+    this.h.banner('FUMBLE', lost ? `${this.defName} RECOVERS` : `#${c.number} ${c.name} FALLS ON IT · ${yards >= 0 ? '+' : ''}${yards}`, '#841617');
+    this.startReplay(this.throwT0 - 0.8); this.deadHold = 3;
+    this.toDead();
+  }
 
   private run(dt: number) {
     const c = this.carrier!;
@@ -972,6 +1052,7 @@ export class Game {
       this.w.shake = 0.08;
       if (isInt) { this.startReplay(this.throwT0 - 0.8); this.toDead(); return; }
       const yards = Math.round((c.pos.z - this.losZ) / YD);
+      if (!oob && this.rng() < 0.03 + 0.1 * this.tension) return this.carrierFumble(c, yards);
       this.result = { kind: 'catch', yards, time: this.playT, oob };
       this.stats.yds += yards; this.stats.long = Math.max(this.stats.long, yards);
       const first = yards >= this.toGo;
@@ -1150,6 +1231,7 @@ export class Game {
     this.best = { rec: this.rec, actors: this.recActors, score: sc, label, team: this.offName, poss: this.offTeam, flip: this.w.flipped };
   }
   get offName() { return this.offTeam === 'tex' ? 'TEXAS' : 'OKLAHOMA'; }
+  get defName() { return this.offTeam === 'tex' ? 'OKLAHOMA' : 'TEXAS'; }
   private potg(dtReal: number) {
     const B = this.best!, n = B.rec.length, a = Math.max(0, n - 1 - 140);
     if (this.t - dtReal <= 0) this.potgF = a;
@@ -1174,6 +1256,10 @@ export class Game {
     if (r.kind === 'int' || r.kind === 'fumble') return this.driveOver(r.kind === 'int' ? 'INTERCEPTED' : 'FUMBLE LOST');
     this.clock -= Math.ceil(r.time);
     this.clockRunning = !this.stopClock && ((r.kind === 'catch' || r.kind === 'run') && !r.oob || r.kind === 'sack');
+    if (r.kind === 'fs') {
+      this.ballOn -= r.yards; this.toGo -= r.yards;
+      return this.toPresnap();
+    }
     if (r.kind === 'pi') {
       this.ballOn = Math.max(1, r.yards >= this.ballOn ? Math.ceil(this.ballOn / 2) : this.ballOn - r.yards);
       this.down = 1; this.toGo = Math.min(10, this.ballOn);
@@ -1326,6 +1412,15 @@ export class Game {
   private endRun(p: THREE.Vector3, oob: boolean) {
     const yards = Math.round((p.z - this.losZ) / YD);
     this.result = { kind: 'run', yards, time: this.playT, oob };
+    if (!oob && this.rng() < 0.04 + 0.1 * this.tension) {
+      this.result = { kind: 'fumble', yards: 0, time: this.playT, why: 'lost' };
+      this.ball.pos.copy(p).setY(0.6); this.ball.vel.set((this.rng() - 0.5) * 4, 2.5, (this.rng() - 0.5) * 4);
+      this.continueBall = true; this.w.football.visible = true;
+      this.audio.play('crowd_roar', 0.8, 1, 'crowd'); this.audio.play('whistle', 0.6);
+      this.h.banner('FUMBLE', `${this.defName} RECOVERS`, '#841617');
+      this.state = 'DEAD'; this.t = 0; this.w.fpArm.visible = false; this.w.camera.up.set(0, 1, 0);
+      return;
+    }
     this.stats.long = Math.max(this.stats.long, yards);
     const first = yards >= this.toGo;
     this.h.banner(first ? 'FIRST DOWN' : yards >= 0 ? `+${yards} YARDS` : `${yards} YARDS`, '#16 MANNING' + (oob ? ' · OUT OF BOUNDS' : ''), '#BF5700');
@@ -1355,9 +1450,9 @@ export class Game {
     }
   }
 
-  private refSignal(kind: 'td' | 'inc' | 'first' | 'pi', at: THREE.Vector3) {
+  private refSignal(kind: 'td' | 'inc' | 'first' | 'pi' | 'fs', at: THREE.Vector3) {
     const near = [...this.refs].sort((a, b) => a.pos.distanceTo(at) - b.pos.distanceTo(at));
-    const anim = { td: 'RefTD', inc: 'RefIncomplete', first: 'RefFirstDown', pi: 'RefFlag' }[kind];
+    const anim = { td: 'RefTD', inc: 'RefIncomplete', first: 'RefFirstDown', pi: 'RefFlag', fs: 'RefFlag' }[kind];
     const who = kind === 'td' ? near.slice(0, 3) : kind === 'first' ? [near.find(r => r.role === 'HL' || r.role === 'LJ')!] : [near[0]];
     const cam = this.w.camera.position;
     for (const r of who) {
@@ -1365,10 +1460,10 @@ export class Game {
       r.heading = kind === 'first' ? 0 : Math.atan2(cam.x - r.pos.x, cam.z - r.pos.z);
       r.play(anim, 0.15, 1, kind !== 'inc');
     }
-    if (kind === 'pi') {
+    if (kind === 'pi' || kind === 'fs') {
       const r = who[0];
       this.flagFx = { t: 0, from: r.pos.clone().setY(2.1), to: at.clone().setY(0.03) };
-      setTimeout(() => r.play('RefPI', 0.2), 1300);
+      if (kind === 'pi') setTimeout(() => r.play('RefPI', 0.2), 1300);
     }
   }
 
@@ -1472,8 +1567,12 @@ export class Game {
       this.w.crowdUniforms.uWave.value = -Math.PI + this.waveT * 1.4;
       if (this.waveT > 4.6) { this.waveT = -1; this.w.crowdUniforms.uWave.value = -10; }
     }
-    this.audio.pulse(Math.max(this.hypeTex, this.hypeOU), this.state === 'POCKET' ? this.pressure : 0);
+    const qbView = ['PRESNAP', 'SNAP', 'POCKET'].includes(this.state) && !this.paused;
+    const clutch = qbView ? THREE.MathUtils.smoothstep(this.tension, 0.3, 1) : 0;
+    this.audio.pulse(Math.max(this.hypeTex, this.hypeOU), Math.max(this.state === 'POCKET' ? this.pressure : 0, clutch * 0.85));
     this.w.post.mat.uniforms.uPressure.value = this.state === 'POCKET' ? this.pressure : 0;
+    const tu = this.w.post.mat.uniforms.uTunnel;
+    tu.value += (Math.min(1, clutch * 0.75 + (this.state === 'POCKET' ? this.pressure * clutch * 0.3 : 0)) - tu.value) * Math.min(1, dt * 2);
     if (this.jumboUntil && this.t > this.jumboUntil && this.state !== 'CUTSCENE') { this.jumboUntil = 0; this.w.jumboLive(); }
   }
 
@@ -1485,9 +1584,11 @@ export class Game {
       this.lookAt.lerp(look, Math.min(1, dt * 10));
     } else if (s === 'AIR') {
       const base = new THREE.Vector3(0, 1.5, this.losZ + 22);
-      const tg = this.ball.target;
-      const focus = tg && this.timeScale < 0.7 ? tg.pos.clone().setY(1.4).lerp(this.ball.pos, 0.4) : base.lerp(this.ball.pos, 0.55);
-      this.lookAt.lerp(focus, Math.min(1, dt * 6));
+      const tg = this.ball.target, b = this.ball;
+      const near = THREE.MathUtils.clamp((b.pos.distanceTo(cam.position) - 2) / 6, 0, 1);
+      const ahead = b.pos.clone().addScaledVector(b.vel, 0.2);
+      const focus = tg && this.timeScale < 0.7 ? tg.pos.clone().setY(1.4).lerp(b.pos, 0.6) : base.lerp(ahead, 0.55 + 0.4 * near);
+      this.lookAt.lerp(focus, Math.min(1, dt * 9));
     } else if ((s === 'RUN' || s === 'DEAD') && this.carrier) {
       this.lookAt.lerp(this.carrier.pos.clone().setY(1.2), Math.min(1, dt * 4));
     }

@@ -41,14 +41,26 @@ export function drawTitle(c: CanvasRenderingContext2D, g: Game, kind: 'title' | 
   }
   if (kind === 'handoff') {
     c.fillStyle = 'rgba(0,0,0,.6)'; c.fillRect(0, 0, UI_W, UI_H);
+    const LR = (h?: string) => (h === 'L' ? 'LEFT' : 'RIGHT');
+    if (g.handoffWhy === 'PICK') {
+      const p1 = g.pickN === 1;
+      txt(c, 'PICK YOUR CONTROLLER', cx, 54, `bold 14px ${MONO}`, '#FFB066', 4);
+      txt(c, `PLAYER ${g.pickN}`, cx, 112, `64px ${IMPACT}`, '#FFFFFF', 4, p1 ? ORANGE : CRIMSON, 4);
+      txt(c, p1 ? 'TEXAS QB' : 'OKLAHOMA QB', cx, 168, `30px ${IMPACT}`, p1 ? ORANGE : '#E03A3C', 3, '#000', 2);
+      txt(c, 'PULL THE TRIGGER ON THE JOY-CON YOU THROW WITH', cx, 222, `bold 14px ${MONO}`, CREAM, 3);
+      if (!p1) txt(c, `PLAYER 1 HAS THE ${LR(g.hands[1])}  ·  SAME ONE IS FINE, YOU PASS IT AT EACH SWAP`, cx, 250, `bold 11px ${MONO}`, CREAM, 2);
+      txt(c, 'ZR OR ZL  ·  ENTER FOR MOUSE', cx, 288, `bold 12px ${MONO}`, '#FFB066', 1);
+      return;
+    }
     const tex = g.offTeam === 'tex';
     txt(c, g.handoffWhy === 'HALFTIME' ? 'TEAMS SWITCH ENDS' : g.handoffWhy, cx, 54, `bold 14px ${MONO}`, '#FFB066', 4);
     txt(c, g.handoffWhy === 'HALFTIME' ? 'HALFTIME' : 'SWITCH QBS', cx, 112, `64px ${IMPACT}`, '#FFFFFF', 4, tex ? ORANGE : CRIMSON, 4);
     txt(c, `PLAYER ${g.qbPlayer}  ·  ${g.offName} QB`, cx, 168, `30px ${IMPACT}`, tex ? ORANGE : '#E03A3C', 3, '#000', 2);
     const ck = Math.max(0, Math.ceil(g.clock));
     txt(c, `TEX ${g.tex}   ·   OU ${g.ou}   ·   ${Math.floor(ck / 60)}:${String(ck % 60).padStart(2, '0')} LEFT`, cx, 210, `bold 16px ${MONO}`, CREAM, 3);
-    txt(c, 'HAND OVER THE JOY-CONS', cx, 262, `bold 14px ${MONO}`, CREAM, 3);
-    txt(c, 'ZR / ENTER WHEN READY', cx, 288, `bold 12px ${MONO}`, '#FFB066', 1);
+    const h = g.hands[g.qbPlayer];
+    txt(c, !h ? 'HAND OVER THE JOY-CONS' : g.sharedPad ? `HAND OVER THE ${LR(h)} JOY-CON` : `PLAYER ${g.qbPlayer}: GRAB THE ${LR(h)} JOY-CON`, cx, 262, `bold 14px ${MONO}`, CREAM, 3);
+    txt(c, `${h === 'L' ? 'ZL' : 'ZR'} / ENTER WHEN READY`, cx, 288, `bold 12px ${MONO}`, '#FFB066', 1);
     return;
   }
   if (m.page === 'home') {

@@ -131,6 +131,8 @@ export class JoyCon {
   }
   recalibrate() { this.calib = []; }
 
+  latest() { return this.samples[(this.head + RING - 1) % RING]; }
+
   window(t0: number, t1: number) {
     const out: Sample[] = [];
     for (let i = 0; i < RING; i++) {

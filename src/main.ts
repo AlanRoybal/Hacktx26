@@ -54,6 +54,8 @@ async function boot() {
     if (st.quality !== 'auto') world.setQuality(st.quality);
   };
   game.onSettings = apply;
+  game.padSide = () => (joy.connected() && joy.active ? (joy.active.isLeft ? 'L' : 'R') : undefined);
+  game.setHand = h => { (joy as any).preferHand = h; };
   game.onConnect = async () => { await joy.connect(true); if (joy.pads.size) mode = 'joycon'; };
   apply(game.settings);
   game.onPotgEnd = () => saveClip(capFrames.splice(0));
@@ -99,19 +101,22 @@ function frame(now: number) {
   if (mode === 'joycon' && joy.active) {
     joy.relativeHand(tmpQ);
     game.handQ.copy(tmpQ);
+    const ls = joy.active.latest();
+    game.handJitter = ls ? Math.hypot(ls.gx, ls.gy, ls.gz) : 0;
     const f = new THREE.Vector3(0, 0, -1).applyQuaternion(tmpQ);
     game.aimYaw = THREE.MathUtils.clamp(Math.atan2(-f.x, -f.z) * 0.25, -0.52, 0.52);
     const st = joy.active.stick[0];
     if (game.state === 'PRESNAP' && Math.abs(st) > 0.7 && !(joy as any)._flick) { (joy as any)._flick = true; game.pickPlay(game.playIdx + Math.sign(st)); }
     if (Math.abs(st) < 0.3) (joy as any)._flick = false;
-  } else if (game.state === 'POCKET' || game.state === 'SNAP') {
+  } else game.handJitter = 0;
+  if (mode !== 'joycon' && (game.state === 'POCKET' || game.state === 'SNAP')) {
     game.aimYaw = -mouse.aimX * 0.3;
     game.handQ.setFromEuler(new THREE.Euler(mouse.aimY * 0.3, -mouse.aimX * 0.4, 0));
   }
   // pocket movement: off-hand Joy-Con stick if held, else the throwing Joy-Con's stick, else arrow keys
   let st = [(keys.has('ArrowRight') ? 1 : 0) - (keys.has('ArrowLeft') ? 1 : 0), (keys.has('ArrowUp') ? 1 : 0) - (keys.has('ArrowDown') ? 1 : 0)];
   if (joy.connected() && joy.active) {
-    const off = [...joy.pads.values()].find(p => p !== joy.active && now - p.lastReport < 300);
+    const off = game.sharedPad ? [...joy.pads.values()].find(p => p !== joy.active && now - p.lastReport < 300) : undefined;
     const js = (off ?? joy.active).stick.map(v => (Math.abs(v) < 0.18 ? 0 : THREE.MathUtils.clamp(v, -1, 1)));
     if (Math.hypot(js[0], js[1]) > Math.hypot(st[0], st[1])) st = js;
   }
@@ -120,7 +125,7 @@ function frame(now: number) {
   for (const p of joy.pads.values()) {
     const prev = (p as any)._btn ?? {}, b = p.btn;
     if (b.pause && !prev.pause) game.togglePause();
-    if (game.paused) { (p as any)._btn = { ...b }; continue; }
+    if (game.paused || (!game.sharedPad && p !== joy.active)) { (p as any)._btn = { ...b }; continue; }
     if (b.face && !prev.face) game.spike();
     if (b.menu && !prev.menu) game.callTimeout();
     if (b.stickClick && !prev.stickClick && game.state === 'POCKET') game.scrambleReq = true;

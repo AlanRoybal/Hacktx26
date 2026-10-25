@@ -25,14 +25,16 @@ export function loadTex(n: string, repeat = false) {
 }
 
 /** Low-res render + one post pass: Bayer dither, posterize, grain, vignette, pocket-pressure red edge. */
+const TRAIL_N = 32;
+
 function makePost() {
   const mat = new THREE.ShaderMaterial({
-    uniforms: { tScene: { value: null }, uTime: { value: 0 }, uPressure: { value: 0 }, uFlash: { value: 0 }, uDaze: { value: 0 },
+    uniforms: { tScene: { value: null }, uTime: { value: 0 }, uPressure: { value: 0 }, uFlash: { value: 0 }, uDaze: { value: 0 }, uTunnel: { value: 0 },
       uRes: { value: new THREE.Vector2(INTERNAL_W, INTERNAL_H) }, uPixel: { value: 1 }, tUI: { value: null }, uUI: { value: 0 },
       uUIRes: { value: new THREE.Vector2(640, 360) } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }',
     fragmentShader: `
-      uniform sampler2D tScene, tUI; uniform float uTime, uPressure, uFlash, uPixel, uDaze, uUI; uniform vec2 uRes, uUIRes; varying vec2 vUv;
+      uniform sampler2D tScene, tUI; uniform float uTime, uPressure, uFlash, uPixel, uDaze, uUI, uTunnel; uniform vec2 uRes, uUIRes; varying vec2 vUv;
       float bayer(vec2 p){ int x=int(mod(p.x,4.)), y=int(mod(p.y,4.)); int i=x+y*4;
         int m[16]=int[16](0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5); return float(m[i])/16.-.5; }
       float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
@@ -42,6 +44,15 @@ function makePost() {
           vec3 c2 = texture2D(tScene, vUv + vec2(.018, .006) * uDaze * (1. + .4*sin(uTime*7.))).rgb;
           c = mix(c, (c + c2) * .5, uDaze);
           c = mix(c, vec3(dot(c, vec3(.3,.59,.11))), uDaze * .6);
+        }
+        if (uTunnel > .01) {   // clutch tunnel vision: edges blur, drain and close in
+          vec2 dv = vUv - .5;
+          float e = smoothstep(mix(.55, .08, uTunnel), mix(.75, .45, uTunnel), length(dv * vec2(1.3, 1.))) * min(1., uTunnel * 1.25);
+          vec3 bl = (texture2D(tScene, vUv + dv * .09 * e).rgb + texture2D(tScene, vUv - dv * .09 * e).rgb
+            + texture2D(tScene, vUv + vec2(dv.y, -dv.x) * .07 * e).rgb) / 3.;
+          c = mix(c, bl, e);
+          c = mix(c, vec3(dot(c, vec3(.3,.59,.11))), e * .6);
+          c *= 1. - e * .93;
         }
         if (uUI > .5) {   // menu UI: chunky pixels, eroded print, row tear, then the same dither and grain as the scene
           vec2 d0 = vUv - .5;
@@ -289,6 +300,7 @@ export class World {
     this.football = ball.scene.getObjectByName('football')!;
     this.football.traverse(o => { (o as THREE.Mesh).castShadow = true; });
     this.scene.add(this.football);
+    this.initTrail();
     // first-person arm: blender object coords -> camera space (same transform the Blender preview used)
     const R = new THREE.Matrix4().set(-1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1)
       .multiply(new THREE.Matrix4().makeRotationZ(THREE.MathUtils.degToRad(55)))
@@ -518,8 +530,63 @@ export class World {
     });
   }
 
+  /** Ball in flight: a fading camera-facing ribbon plus a soft glow, sized up with distance so it reads at 960x540. */
+  ballFlying = false;
+  private trail: { mesh: THREE.Mesh; glow: THREE.Sprite; pts: THREE.Vector3[]; last: THREE.Vector3; fade: number } | null = null;
+  private initTrail() {
+    const N = TRAIL_N, g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 2 * 3), 3));
+    g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(N * 2 * 3), 3));
+    const idx: number[] = [];
+    for (let i = 0; i < N - 1; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+    g.setIndex(idx);
+    const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending,
+      depthWrite: false, side: THREE.DoubleSide, fog: false }));
+    mesh.frustumCulled = false; mesh.visible = false;
+    const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+    const x = cv.getContext('2d')!, gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(255,240,210,1)'); gr.addColorStop(0.3, 'rgba(255,200,140,.45)'); gr.addColorStop(1, 'rgba(255,160,90,0)');
+    x.fillStyle = gr; x.fillRect(0, 0, 64, 64);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, blending: THREE.AdditiveBlending,
+      depthWrite: false, fog: false }));
+    glow.visible = false;
+    this.scene.add(mesh, glow);
+    this.trail = { mesh, glow, pts: [], last: this.football.position.clone(), fade: 0 };
+  }
+  private updateTrail() {
+    const T = this.trail; if (!T) return;
+    const p = this.football.position, step = p.distanceTo(T.last), now = performance.now() / 1000;
+    const dt = Math.max(1 / 240, Math.min(0.2, now - ((T as any).tPrev ?? now - 1 / 60))); (T as any).tPrev = now;
+    const flying = this.ballFlying && this.football.visible && step < 4;
+    if (step >= 4) T.pts = [];
+    T.last.copy(p);
+    if (flying) { T.fade = 1; if (!T.pts.length || T.pts[0].distanceTo(p) > 0.28) { T.pts.unshift(p.clone()); if (T.pts.length > TRAIL_N) T.pts.pop(); } else T.pts[0].copy(p); }
+    else { T.fade = Math.max(0, T.fade - dt * 3); if (T.fade === 0) T.pts = []; }
+    const n = T.pts.length, on = n > 1 && T.fade > 0;
+    T.mesh.visible = on; T.glow.visible = on;
+    if (!on) return;
+    const cam = this.camera.position, pos = T.mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const col = T.mesh.geometry.getAttribute('color') as THREE.BufferAttribute;
+    const tan = new THREE.Vector3(), side = new THREE.Vector3(), v = new THREE.Vector3();
+    for (let i = 0; i < TRAIL_N; i++) {
+      const q = T.pts[Math.min(i, n - 1)], q2 = T.pts[Math.min(i + 1, n - 1)], q0 = T.pts[Math.min(n - 1, Math.max(0, i - 1))];
+      tan.subVectors(q0, q2); if (tan.lengthSq() < 1e-6) tan.set(0, 0, 1);
+      side.crossVectors(tan, v.subVectors(q, cam)).normalize();
+      const k = i < n ? 1 - i / (n - 1 || 1) : 0, w = 0.08 * Math.max(1, q.distanceTo(cam) / 12) * (0.3 + 0.7 * k);
+      pos.setXYZ(i * 2, q.x + side.x * w, q.y + side.y * w, q.z + side.z * w);
+      pos.setXYZ(i * 2 + 1, q.x - side.x * w, q.y - side.y * w, q.z - side.z * w);
+      const a = k * k * 0.75 * T.fade;
+      col.setXYZ(i * 2, a, a * 0.86, a * 0.66); col.setXYZ(i * 2 + 1, a, a * 0.86, a * 0.66);
+    }
+    pos.needsUpdate = true; col.needsUpdate = true;
+    T.glow.position.copy(p);
+    T.glow.scale.setScalar(0.9 * Math.max(1, p.distanceTo(cam) / 10));
+    (T.glow.material as THREE.SpriteMaterial).opacity = 0.7 * T.fade;
+  }
+
   render(t: number) {
     this.updateFx(t);
+    this.updateTrail();
     this.frame++;
     this.renderer.info.reset();
     const replay = this.jumboMode === 'replay' && this.replayHook;
