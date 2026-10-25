@@ -131,7 +131,7 @@ export class Game {
       else if (t > 24 && t < 31) { const c = ['#FF6A13', '#FFFFFF', '#BF5700', '#FFD27A'][Math.floor(Math.random() * 4)]; this.w.burst(V((Math.random() - 0.5) * 70, 38 + Math.random() * 18, 10 + Math.random() * 50), c); this.fxT = 0.3; this.audio.play('cannon', 0.25, 1.6 + Math.random() * 0.4); }
       else this.fxT = 0.2;
     }
-    if (t > 17.5 && t - dt <= 17.5) this.audio.play('bigtex_howdy', 1.2);
+    if (t > 17.5 && t - dt <= 17.5) this.audio.play('bigtex_howdy', 1);
     if (t > 24 && t - dt <= 24) { this.spikeTex = 1.2; this.audio.play('crowd_roar', 0.9, 1, 'crowd'); }
     if (t > 37.5) { this.fromIntro = true; this.start(); }
   }
@@ -703,7 +703,7 @@ export class Game {
     }
     if (s === 'PRESNAP' && this.cadT && this.t > this.cadT) {   // QB barks the cadence once the play is set
       this.cadT = 0;
-      this.audio.play(`qb_cadence_${Math.floor(this.rng() * 4)}` as Clip, 1.1);
+      this.audio.play(`qb_cadence_${Math.floor(this.rng() * 4)}` as Clip, 1);
     }
     if (s === 'SNAP') {
       const f = Math.min(1, this.t / 0.35);
