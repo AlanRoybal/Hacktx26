@@ -7,7 +7,7 @@ export class Jets {
   private t0 = -1e9;
   private glows: THREE.Mesh[] = [];
   static readonly SPEED = 75;
-  static readonly ALT = 48;
+  static readonly ALT = 88;
 
   constructor() {
     const gray = new THREE.MeshStandardMaterial({ color: '#7d858e', roughness: 0.55, metalness: 0.35 });

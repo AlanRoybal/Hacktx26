@@ -358,6 +358,9 @@ export class World {
     const su = sky.material.uniforms;
     su.turbidity.value = 9; su.rayleigh.value = 2.6; su.mieCoefficient.value = 0.01; su.mieDirectionalG.value = 0.85; su.sunPosition.value.copy(SUN_DIR);
     this.scene.add(sky);
+    const ground = new THREE.Mesh(new THREE.CircleGeometry(540, 48), new THREE.MeshStandardMaterial({ color: '#6E7446', roughness: 1 }));
+    ground.rotation.x = -Math.PI / 2; ground.position.y = -0.2; ground.receiveShadow = true;
+    this.scene.add(ground);   // fairgrounds lawn, so nothing outside the bowl floats over open sky in daylight
     this.beamFx.group.visible = false;
     const SHOW = [[-30, -92, 14], [25, -94, 14], [-60, -30, 12], [60, -35, 12], [-58, 30, 12], [58, 40, 12], [-20, 95, 14], [30, 92, 14]]
       .map(([x, y, z]) => new THREE.Vector3(x, z, -y));
