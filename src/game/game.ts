@@ -121,7 +121,7 @@ export class Game {
         const x = -26 + Math.random() * 2;
         this.w.burst(V(x, 0.6, -59), ['#8c8c8c', '#a6a39d', '#6f6c68'][Math.floor(Math.random() * 3)], 80, 2.6, 0.9, 2.6 + Math.random(), 3.4, false);
         this.w.burst(V(x, 1.4, -60), '#d9d4cc', 40, 1.4, 0.5, 4.2, 4.2, false);
-        this.w.burst(V(x, 2, -61), '#FF7A2A', 24, 1.2, 0.3, 5, 2.4, true);
+        this.w.burst(V(x, 2.2, -61.5), '#5a2a10', 10, 1.6, 0.4, 3.2, 2.2, true);
         for (const dx of [-3.2, 3.2]) {
           this.w.burst(V(-26 + dx, 0.3, -57.5), '#f2f2f2', 30, 5.5, 2.5, 1.6, 1.4, false);
           this.w.burst(V(-26 + dx, 0.2, -56), '#FFD27A', 30, 7, -6, 0.35, 1.1, true);
