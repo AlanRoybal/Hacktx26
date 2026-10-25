@@ -484,6 +484,54 @@ def actions():
                                        'upperarm_L': (-120, -10, 0), 'thigh_L': (15, 0, 0), 'thigh_R': (30, 0, 0), 'shin_L': (30, 0, 0), 'shin_R': (50, 0, 0)}),
                                 26: P({'hips': (88, 0, 0), 'loc': (0, -1.0, -0.84), 'neck': (-55, 0, 0), 'upperarm_R': (-28, 0, 22), 'forearm_R': (-118, 0, 0),
                                        'upperarm_L': (-150, -20, 0), 'thigh_L': (5, 0, 0), 'thigh_R': (15, 0, 0), 'shin_L': (20, 0, 0), 'shin_R': (35, 0, 0)})})
+    # line play: OL kick-slide and punch, anchor against a bull rush, get beaten; DL moves
+    pset = lambda k, st: P(CROUCH, {'loc': (0, 0, -0.17), 'spine': (22, 0, 0), 'neck': (-22, 0, 0),
+                                    'thigh_L': (-45 + 12 * st, 0, -14), 'thigh_R': (-45 - 12 * st, 0, 14), 'shin_L': (60, 0, 0), 'shin_R': (60, 0, 0),
+                                    'upperarm_L': (-55 - 30 * k, 12, 0), 'upperarm_R': (-55 - 30 * k, -12, 0),
+                                    'forearm_L': (-95 + 80 * k, 0, 0), 'forearm_R': (-95 + 80 * k, 0, 0)})
+    A['PassSet'] = (True, {0: pset(0, 1), 6: pset(1, 0), 12: pset(0.3, -1), 18: pset(1, 0), 24: pset(0, 1)})
+    def drive(t, lean, arm):
+        c, sn = math.cos(t), math.sin(t)
+        return P(CROUCH, {'loc': (0, 0, -0.2), 'spine': (lean, 0, 4 * sn), 'neck': (-lean, 0, 0),
+                          'thigh_L': (-50 + 20 * c, 0, -10), 'thigh_R': (-50 - 20 * c, 0, 10), 'shin_L': (65 + 18 * sn, 0, 0), 'shin_R': (65 - 18 * sn, 0, 0),
+                          'upperarm_L': (arm, 8, 0), 'upperarm_R': (arm, -8, 0), 'forearm_L': (-12, 0, 0), 'forearm_R': (-12, 0, 0),
+                          'hand_L': (30, 0, 0), 'hand_R': (30, 0, 0)})
+    A['Anchor'] = (True, {f: drive(2 * math.pi * f / 16, 36, -88) for f in (0, 4, 8, 12, 16)})
+    A['BullRush'] = (True, {f: drive(2 * math.pi * f / 14, 48, -96) for f in (0, 3.5, 7, 10.5, 14)})
+    A['Beaten'] = (False, {0: pset(0.5, 0),
+                           6: P(pset(0.5, 0), {'spine': (30, 0, 35), 'chest': (0, 0, 20), 'upperarm_R': (-100, 40, 0), 'forearm_R': (-10, 0, 0), 'thigh_R': (-70, 0, 30), 'shin_R': (60, 0, 0)}),
+                           14: P(pset(0.5, 0), {'loc': (0, 0, -0.25), 'spine': (45, 0, 40), 'chest': (0, 0, 20), 'upperarm_R': (-120, 50, 0), 'forearm_R': (-10, 0, 0),
+                                                'upperarm_L': (-60, -10, 0), 'thigh_R': (-70, 0, 30), 'shin_R': (70, 0, 0)}),
+                           24: P(pset(0.5, 0), {'loc': (0, 0, -0.22), 'spine': (40, 0, 35), 'chest': (0, 0, 15), 'upperarm_R': (-110, 45, 0), 'forearm_R': (-20, 0, 0),
+                                                'upperarm_L': (-50, -10, 0), 'thigh_R': (-60, 0, 25), 'shin_R': (65, 0, 0)})})
+    r0 = rush(0)
+    A['Swim'] = (False, {0: r0,
+                         4: P(r0, {'spine': (35, 0, 25), 'upperarm_L': (-40, -5, 0), 'forearm_L': (-20, 0, 0), 'upperarm_R': (-120, 15, 0), 'forearm_R': (-60, 0, 0)}),
+                         9: P(r0, {'spine': (30, 0, -15), 'chest': (0, 0, -15), 'upperarm_L': (-30, -10, 0), 'upperarm_R': (-175, 20, 0), 'forearm_R': (-30, 0, 0)}),
+                         14: P(r0, {'spine': (35, 0, -20), 'upperarm_R': (-60, -10, 0), 'forearm_R': (-40, 0, 0), 'thigh_R': (-75, 0, 0), 'shin_R': (70, 0, 0)}),
+                         20: P(run_pose(0.25), {'spine': (30, 0, 0), 'neck': (-25, 0, 0)})})
+    A['Rip'] = (False, {0: r0,
+                        4: P(r0, {'loc': (0, 0, -0.24), 'spine': (45, 0, 20), 'chest': (0, 0, 15), 'upperarm_R': (-20, 10, 0), 'forearm_R': (-100, 0, 0)}),
+                        9: P(r0, {'spine': (35, 0, -10), 'upperarm_R': (-150, 10, 0), 'forearm_R': (-80, 0, 0), 'upperarm_L': (-60, -5, 0)}),
+                        14: P(r0, {'spine': (35, 0, -5), 'upperarm_R': (-100, 0, 0), 'forearm_R': (-50, 0, 0), 'thigh_R': (-75, 0, 0), 'shin_R': (70, 0, 0)}),
+                        20: P(run_pose(0.25), {'spine': (30, 0, 0), 'neck': (-25, 0, 0)})})
+    A['Spin'] = (False, {0: r0,
+                         5: P(r0, {'spine': (20, 0, 0), 'chest': (0, 0, 30), 'upperarm_L': (-40, -20, 0), 'upperarm_R': (-40, 20, 0), 'forearm_L': (-130, 0, 0), 'forearm_R': (-130, 0, 0)}),
+                         12: P(r0, {'spine': (25, 0, 0), 'chest': (0, 0, -20), 'upperarm_L': (-110, -30, 0), 'forearm_L': (-20, 0, 0), 'upperarm_R': (-40, 20, 0), 'forearm_R': (-120, 0, 0)}),
+                         18: P(run_pose(0.25), {'spine': (30, 0, 0), 'neck': (-25, 0, 0)})})
+    # the defense after giving up a touchdown
+    A['Dejected'] = (True, {0: P(rest, hh, {'spine': (14, 0, 4)}), 30: P(rest, hh, {'spine': (18, 0, -4), 'neck': (32, 0, 6)}), 60: P(rest, hh, {'spine': (14, 0, 4)})})
+    slump = P(rest, {'spine': (18, 0, 0), 'neck': (32, 0, 0), 'upperarm_L': (8, -8, 0), 'upperarm_R': (8, 8, 0), 'forearm_L': (-10, 0, 0), 'forearm_R': (-10, 0, 0)})
+    A['KickTurf'] = (False, {0: rest,
+                             8: P(rest, {'thigh_R': (25, 0, 0), 'shin_R': (60, 0, 0), 'upperarm_L': (-10, -25, 0), 'upperarm_R': (-10, 25, 0), 'spine': (-5, 0, 0)}),
+                             14: P(rest, {'thigh_R': (-60, 0, 0), 'shin_R': (10, 0, 0), 'foot_R': (20, 0, 0), 'spine': (10, 0, 10), 'upperarm_L': (-40, -25, 0), 'upperarm_R': (-40, 25, 0)}),
+                             24: slump, 40: P(slump, {'neck': (36, 0, -8)})})
+    A['Kneel'] = (False, {0: rest,
+                          10: P(rest, {'loc': (0, 0, -0.22), 'thigh_L': (-60, 0, 0), 'shin_L': (60, 0, 0), 'thigh_R': (-10, 0, 0), 'shin_R': (70, 0, 0), 'spine': (15, 0, 0)}),
+                          20: {'loc': (0, 0, -0.45), 'thigh_L': (-90, 0, 0), 'shin_L': (90, 0, 0), 'thigh_R': (10, 0, 0), 'shin_R': (100, 0, 0), 'foot_R': (30, 0, 0),
+                               'spine': (25, 0, 0), 'neck': (28, 0, 0), 'upperarm_L': (-40, -5, 0), 'forearm_L': (-60, 0, 0), 'upperarm_R': (-10, 10, 0), 'forearm_R': (-20, 0, 0)},
+                          40: {'loc': (0, 0, -0.45), 'thigh_L': (-90, 0, 0), 'shin_L': (90, 0, 0), 'thigh_R': (10, 0, 0), 'shin_R': (100, 0, 0), 'foot_R': (30, 0, 0),
+                               'spine': (28, 0, 0), 'neck': (34, 0, 0), 'upperarm_L': (-40, -5, 0), 'forearm_L': (-60, 0, 0), 'upperarm_R': (-10, 10, 0), 'forearm_R': (-20, 0, 0)}})
     return A
 
 

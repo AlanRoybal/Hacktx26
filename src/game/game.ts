@@ -5,7 +5,7 @@ import { PLAYS, OFF_SPOT, DEF_SPOT, OFF_NUM, DEF_NUM, OFF_NAME, DEF_NAME, OU_OFF
 import type { ThrowEvent } from '../input/types';
 import type { Audio, Clip } from '../audio';
 
-export type State = 'TITLE' | 'INTRO' | 'PRESNAP' | 'SNAP' | 'POCKET' | 'AIR' | 'RUN' | 'SACK' | 'SCRAMBLE' | 'TACKLED' | 'DEAD' | 'CUTSCENE' | 'OVER' | 'POTG' | 'HANDOFF';
+export type State = 'TITLE' | 'INTRO' | 'PRESNAP' | 'SNAP' | 'POCKET' | 'AIR' | 'RUN' | 'SACK' | 'SCRAMBLE' | 'TACKLED' | 'DEAD' | 'CUTSCENE' | 'OVER' | 'POTG' | 'HANDOFF' | 'OPP';
 type Result = { kind: 'catch' | 'inc' | 'int' | 'sack' | 'fumble' | 'td' | 'pi' | 'run' | 'fs'; yards: number; time: number; oob?: boolean; why?: string };
 
 export interface Hooks {
@@ -18,6 +18,7 @@ export interface Hooks {
   rumble(steps: [number, number, number][], both?: boolean): void;
 }
 
+const ORDN = ['', '1ST', '2ND', '3RD', '4TH'];
 const OL_FLINCH: OffPos[] = ['LT', 'LG', 'RG', 'RT', 'TE'];
 const LIVE: State[] = ['SNAP', 'POCKET', 'AIR', 'RUN', 'SACK', 'SCRAMBLE', 'TACKLED'];
 const REF_SPOT: Record<string, [number, number, number]> = { R: [-4, -12, 0], CJ: [5, -11, 0], HL: [-25.8, 0, Math.PI / 2], LJ: [25.8, 0, -Math.PI / 2], BJ: [0, 24, Math.PI] };
@@ -34,9 +35,11 @@ export class Game {
   state: State = 'TITLE';
   t = 0;            // time in state
   playT = 0;        // time since snap
-  clock = 105;
+  clock = 120;
+  qtr = 1;
+  get qLen() { return this.mode === '1v1' ? 90 : 120; }
   down = 1; toGo = 10; ballOn = 45;   // yards to the OU goal line
-  tex = 27; ou = 31;
+  tex = 0; ou = 0;
   stats = { att: 0, comp: 0, yds: 0, td: 0, int: 0, sacks: 0, bestSpiral: 1, lastPlay: '', fast: 0, long: 0 };
   playIdx = 0;
   play: Play = PLAYS[0];
@@ -249,19 +252,68 @@ export class Game {
   /** 1v1: player 1 is Texas, player 2 is Oklahoma. */
   get qbPlayer() { return this.offTeam === 'tex' ? 1 : 2; }
   private driveOver(why: string) {
-    if (this.mode === 'solo') return this.gameOver(why === 'TOUCHDOWN', why === 'TOUCHDOWN' ? '' : why);
-    if (this.clock <= 0) return this.clockOut();
+    if (this.clock <= 0) { this.clock = 0; if (this.nextQtr() !== 'go') return; }
+    if (this.mode === 'solo') return this.oppDrive(why);
     this.newDrive(this.defTeam, why);
   }
   half = 1;
-  private clockOut() {
-    this.clock = 0;
-    if (this.mode === '1v1' && this.half === 1) {
-      this.half = 2; this.clock = 180; this.timeouts = 3;
+  /** Clock hit zero: next quarter ('go'), halftime (second half kicked off), or the game is over. */
+  private nextQtr(): 'go' | 'half' | 'over' {
+    if (this.qtr >= 4) { this.gameOver(this.tex > this.ou, this.tex === this.ou ? 'TIE GAME' : 'TIME EXPIRED'); return 'over'; }
+    this.qtr++; this.clock = this.qLen; this.clockRunning = false;
+    if (this.qtr === 3) {
+      this.half = 2; this.timeouts = 3;
       this.audio.playMusic('march_grandioso', false);
-      return this.newDrive('ou', 'HALFTIME');
+      if (this.mode === '1v1') this.newDrive('ou', 'HALFTIME'); else this.oppDrive('HALFTIME');
+      return 'half';
     }
-    this.gameOver(this.mode === '1v1' && this.tex > this.ou, 'TIME EXPIRED');
+    this.h.banner(`END OF THE ${ORDN[this.qtr - 1]} QUARTER`, `${ORDN[this.qtr]} QUARTER  ·  TEX ${this.tex}  OU ${this.ou}`);
+    this.h.hud(this);
+    return 'go';
+  }
+  private oppNext: { ballOn: number; result: string; sub: string; pts: number; dur: number } | null = null;
+  /** Solo: Oklahoma's possession is simulated as a drive summary, then Texas gets the ball back. */
+  private oppDrive(why: string) {
+    const k = ({ freshman: 0.7, starter: 1, heisman: 1.3 } as Record<string, number>)[this.settings.difficulty] ?? 1;
+    const start = why === 'TOUCHDOWN' || why === 'HALFTIME' ? 25 : THREE.MathUtils.clamp(this.ballOn, 5, 95);   // OU's own yard line
+    const r = this.rng(), pTD = (0.26 + 0.004 * (start - 25)) * k, pFG = 0.2 * k;
+    const n = 3 + Math.floor(this.rng() * 8), dur = 30 + Math.floor(this.rng() * 60);
+    let o: NonNullable<Game['oppNext']>;
+    if (r < pTD) o = { ballOn: 75, result: 'SOONER TOUCHDOWN', sub: '', pts: 7, dur };
+    else if (r < pTD + pFG) o = { ballOn: 75, result: 'OU FIELD GOAL', sub: `${22 + Math.floor(this.rng() * 30)} YARDS, GOOD`, pts: 3, dur };
+    else if (r < pTD + pFG + 0.12) { const at = Math.min(95, start + 10 + Math.floor(this.rng() * 30)); o = { ballOn: at, result: 'TEXAS PICKS IT OFF', sub: `LONGHORNS BALL AT THE ${at > 50 ? 'OU ' + (100 - at) : 'TEX ' + at}`, pts: 0, dur: Math.floor(dur * 0.6) }; }
+    else { const at = 100 - Math.max(5, Math.min(35, 100 - start - 40 - Math.floor(this.rng() * 15))); o = { ballOn: at, result: 'OU PUNTS', sub: `TEXAS TAKES OVER AT ITS OWN ${100 - at}`, pts: 0, dur: Math.floor(dur * 0.7) }; }
+    const yds = o.pts === 7 ? 100 - start : o.pts === 3 ? Math.max(10, 70 - start + Math.floor(this.rng() * 15)) : Math.floor(this.rng() * 30);
+    o.sub ||= `${n} PLAYS  ·  ${yds} YARDS  ·  ${Math.floor(o.dur / 60)}:${String(o.dur % 60).padStart(2, '0')}`;
+    this.oppNext = o;
+    this.state = 'OPP'; this.t = 0; this.clockRunning = false;
+    this.h.plays(this.playIdx, false); this.w.fpArm.visible = false; this.w.mosaicTarget = 1;
+    this.h.banner(why === 'HALFTIME' ? 'HALFTIME' : 'OKLAHOMA BALL', why === 'HALFTIME' ? `OU RECEIVES  ·  TEX ${this.tex}  OU ${this.ou}` : `SOONERS START AT THEIR OWN ${start}`, '#841617');
+    this.w.drawJumbo(['SOONERS', 'DRIVE'], '#841617', '#FDF9D8'); this.jumboUntil = 99;
+  }
+  private opp() {
+    const o = this.oppNext!, a = this.t * 0.06;
+    this.w.camera.position.set(Math.sin(a) * 50, 34, Math.cos(a) * 70); this.lookAt.set(0, 0, 0); this.w.camera.up.set(0, 1, 0);
+    if (this.t > 2.4 && !o.result.startsWith('~')) {
+      const overflow = o.dur >= this.clock;
+      this.clock = Math.max(0, this.clock - o.dur);
+      this.ou += o.pts;
+      this.h.banner(o.result, o.sub, o.pts ? '#841617' : '#BF5700');
+      this.w.drawJumbo(o.result.split(' ').length > 2 ? o.result.split(' ').slice(-2) : o.result.split(' '), o.pts ? '#841617' : '#BF5700', '#FDF9D8');
+      if (o.pts === 7) { this.audio.play('crowd_boo', 0.8, 1, 'crowd'); this.audio.playMusic('boomer_sooner', false); this.spikeOU = 1; this.coachReact('DropReact'); }
+      else if (o.pts) { this.audio.play('crowd_boo', 0.5, 1, 'crowd'); this.spikeOU = 0.6; }
+      else { this.audio.play('crowd_roar', 0.8, 1, 'crowd'); this.spikeTex = 0.8; }
+      this.h.hud(this);
+      o.result = '~' + (overflow ? 'Q' : '');
+    }
+    if (this.t > 5.2) {
+      const endQ = o.result === '~Q';
+      this.oppNext = null; this.jumboUntil = 0; this.w.jumboLive();
+      if (endQ) { this.clock = 0; const q = this.qtr, r = this.nextQtr(); if (r !== 'go') return; if (q === 1 || q === 3) this.clock = Math.max(20, this.qLen - Math.floor(this.rng() * 40)); }
+      this.down = 1; this.toGo = 10; this.ballOn = o.ballOn;
+      this.h.banner('TEXAS BALL', `${o.ballOn > 50 ? 'OWN ' + (100 - o.ballOn) : 'OU ' + o.ballOn}  ·  ${ORDN[this.qtr]} QUARTER`);
+      this.toPresnap(); this.h.hud(this);
+    }
   }
   private newDrive(team: 'tex' | 'ou', why: string) {
     this.handoffWhy = why;
@@ -313,9 +365,9 @@ export class Game {
   }
 
   resetDrive() {
-    Object.assign(this, { clock: 105, down: 1, toGo: 10, ballOn: 45, tex: 27, ou: 31, spikeTex: 0, spikeOU: 0, timeouts: 3, clockRunning: false, stopClock: false, entry: null });
-    this.half = 1;
-    if (this.mode === '1v1') Object.assign(this, { clock: 180, tex: 0, ou: 0 });
+    Object.assign(this, { clock: 120, down: 1, toGo: 10, ballOn: 75, tex: 0, ou: 0, spikeTex: 0, spikeOU: 0, timeouts: 3, clockRunning: false, stopClock: false, entry: null });
+    this.half = 1; this.qtr = 1; this.oppNext = null;
+    if (this.mode === '1v1') Object.assign(this, { clock: 90, ballOn: 45 });
     if (this.sides) this.setPossession('tex');
     this.stats = { att: 0, comp: 0, yds: 0, td: 0, int: 0, sacks: 0, bestSpiral: 1, lastPlay: '', fast: 0, long: 0 };
     this.best = null;
@@ -335,7 +387,7 @@ export class Game {
       this.h.hud(this);
       return this.h.screen('handoff', this);
     }
-    this.h.banner('TEXAS BALL', `OU ${this.ballOn}  |  DOWN 4  |  1:45 LEFT`);
+    this.h.banner('KICKOFF', 'TEXAS BALL AT ITS OWN 25  ·  1ST QUARTER');
     this.toPresnap();
   }
 
@@ -435,13 +487,14 @@ export class Game {
     if (down && this.state === 'OVER' && this.t > Math.max(2, this.overT + 1)) { this.toTitle(); return; }
     if (down && this.state === 'PRESNAP' && this.t > 0.6) this.snap();
     if (down && this.state === 'CUTSCENE' && this.t > 1.5) this.t = 99;
+    if (down && this.state === 'OPP' && this.t > 1) this.t = Math.max(this.t, this.oppNext?.result.startsWith('~') ? 99 : 2.4);
     if (down && this.state === 'SACK' && this.t > 1.6) this.t = 99;
   }
 
   /** 0..1 how much the moment weighs: close score, late clock, 3rd/4th down, red zone. */
   get tension() {
     const m = Math.abs(this.tex - this.ou), close = m <= 3 ? 1 : m <= 8 ? 0.75 : m <= 16 ? 0.35 : 0.1;
-    const late = this.mode === '1v1' ? (this.half === 2 ? 1 - this.clock / 180 : 0.25 * (1 - this.clock / 180)) : 1 - this.clock / 105;
+    const late = this.qtr === 4 ? 1 - this.clock / this.qLen : this.qtr === 2 ? 0.25 * (1 - this.clock / this.qLen) : 0;
     const sit = (this.down === 4 ? 0.3 : this.down === 3 ? 0.12 : 0) + (this.ballOn <= 20 ? 0.12 : 0);
     return THREE.MathUtils.clamp(close * (0.3 + 0.7 * THREE.MathUtils.clamp(late, 0, 1)) + sit, 0, 1);
   }
@@ -645,11 +698,11 @@ export class Game {
     }
     if (LIVE.includes(s)) { this.playT += dt; this.simPlayers(dt); this.simRefs(dt); if (s !== 'SACK' && s !== 'TACKLED') this.separate(); }
     if (s === 'DEAD' && this.t > 0.35 && this.t - dt <= 0.35)   // play's over: everyone not involved settles
-      [...this.all, ...this.refs].forEach(a => { if (['Run', 'Backpedal', 'Rush', 'Block'].includes(a.current)) { a.vel.set(0, 0, 0); a.play('Idle', 0.6); } });
+      [...this.all, ...this.refs].forEach(a => { if (['Run', 'Backpedal', 'Rush', 'Block', 'PassSet', 'Anchor', 'BullRush', 'Beaten', 'Swim', 'Rip', 'Spin'].includes(a.current)) { a.vel.set(0, 0, 0); a.play('Idle', 0.6); } });
     if (s === 'PRESNAP' && this.clockRunning) {
       this.clock -= dtReal;
       if ((this.hudT += dtReal) > 0.2) { this.hudT = 0; this.h.hud(this); }
-      if (this.clock <= 0) this.clockOut();
+      if (this.clock <= 0) { this.clock = 0; this.nextQtr(); }
     }
     if (s === 'POCKET') this.pocket(dt);
     if (s === 'AIR') this.air(dt);
@@ -659,6 +712,7 @@ export class Game {
     if (s === 'TACKLED') this.tackled(dt);
     if (s === 'DEAD' && this.t > this.deadHold) this.applyResult();
     if (s === 'CUTSCENE') this.cutscene(dt);
+    if (s === 'OPP') this.opp();
     if (s === 'OVER' && this.t > 1 && this.t - dt <= 1) this.h.screen('over', this);
     this.w.post.mat.uniforms.uFlash.value *= Math.max(0, 1 - dtReal * 4);
     this.updatePulse(dtReal);
@@ -676,6 +730,7 @@ export class Game {
     this.sideline(dtReal);
     this.all.forEach(a => a.update(dt));
     this.extras.forEach(a => a.update(dt));
+    if (this.carrier && !this.continueBall && (s === 'RUN' || s === 'CUTSCENE' || s === 'DEAD')) this.ballToHand(this.carrier);
     this.updateArm(dt);
     if (this.flagFx) {
       const f = this.flagFx; f.t += dt;
@@ -729,23 +784,47 @@ export class Game {
       this.animByVel(a, 0);
     }
     // line
-    for (const p of ['LT', 'LG', 'C', 'RG', 'RT'] as OffPos[]) {
-      const a = this.off.get(p)!;
+    const OL = ['LT', 'LG', 'C', 'RG', 'RT'].map(p => this.off.get(p as OffPos)!);
+    for (const a of OL) {
       if (a.data.done) continue;
-      a.pos.z = Math.max(z - 2.2 - 1.2 * this.pressure, a.pos.z - 0.6 * dt);
-      a.play('Block', 0.25); a.heading = 0;
+      const set = a.data.setZ ??= a.pos.z - 1.1;
+      a.pos.z = Math.max(Math.min(set, z - 0.9) - 1.2 * this.pressure, a.pos.z - (t < 0.6 ? 2.2 : 0.35) * dt);
+      if (!a.data.fight) { a.play('PassSet', 0.2, 1.1); a.heading = 0; }
+      a.data.fight = '';
     }
     for (const p of ['DE1', 'DT1', 'DT2', 'DE2'] as DefPos[]) {
       const a = this.def.get(p)!;
       if (a.data.done || this.state === 'SCRAMBLE' || this.state === 'TACKLED') continue;
+      const L = a.data.lp ??= this.dlPlan(a, p === this.rusher, OL);
+      const man: Actor = L.man;
       if (p === this.rusher && t > this.sackT - 0.8 && this.state === 'POCKET') {
         const qbp = this.w.camera.position.clone().setY(0);
         this.moveTo(a, qbp, 6.8, dt);
         a.play('Run', 0.15, 1.2); a.face(qbp);
-      } else {
-        a.pos.z = Math.max(z - 1.6 - 1.2 * this.pressure, a.pos.z - 0.5 * dt);
-        if (p === this.rusher) a.pos.x += (Math.sign(a.pos.x) * 4.2 - a.pos.x) * dt * 0.6;
-        a.play('Rush', 0.25); a.heading = Math.PI;
+        continue;
+      }
+      const front = man.pos.clone().add(new THREE.Vector3(L.dx, 0, 0.85));
+      if (t < 0.35 || man.data.done) {                     // get-off, then into the blocker's chest
+        this.moveTo(a, front, 5.5, dt); a.play('Rush', 0.15, 1.3); a.heading = Math.PI;
+      } else if (L.move === 'BullRush') {                   // walk the blocker back into the pocket
+        if (t > L.at) man.pos.z = Math.max(z - 3.2, man.pos.z - 0.45 * dt);
+        a.pos.lerp(front, Math.min(1, dt * 8)); a.vel.set(0, 0, 0); a.heading = Math.PI;
+        a.play(t > L.at ? 'BullRush' : 'Rush', 0.2, 1.1); man.play(t > L.at ? 'Anchor' : 'PassSet', 0.2); man.data.fight = 'anchor';
+      } else if (t < L.at) {                                // hand fighting at the point of attack
+        a.pos.lerp(front, Math.min(1, dt * 8)); a.vel.set(0, 0, 0); a.heading = Math.PI;
+        a.play('Rush', 0.2, 0.9);
+      } else {                                              // the move: swim / rip / spin past the blocker's shoulder
+        const k = Math.min(1, (t - L.at) / 0.5);
+        if (!L.fired) {
+          L.fired = true; a.play(L.move, 0.08, 1.15, true);
+          if (L.win) { man.play('Beaten', 0.1, 1, true); this.sfx('grunt2', a.pos, 0.6); }
+        }
+        const past = man.pos.clone().add(new THREE.Vector3(L.side * 0.95 * k, 0, 0.85 - (L.win ? 1.5 : 0.35) * k));
+        if (L.win && k >= 1) { past.z = Math.max(z - 2.8, past.z - 0.6 * (t - L.at - 0.5)); }
+        a.pos.lerp(past, Math.min(1, dt * 10)); a.vel.set(0, 0, 0);
+        a.heading = L.move === 'Spin' && k < 1 ? Math.PI + L.side * k * Math.PI * 1.9 : Math.PI;
+        if (L.win) { man.data.fight = 'beaten'; man.heading = Math.atan2(a.pos.x - man.pos.x, a.pos.z - man.pos.z); if (k >= 1 && man.current !== 'Beaten') man.play('PassSet', 0.3); }
+        else { man.data.fight = 'stone'; man.heading = 0; man.play('Anchor', 0.2); if (k >= 1 && t > L.at + 1.4) { L.at = t + 0.6 + this.rng() * 0.8; L.fired = false; L.side = -L.side; } }
       }
     }
     // coverage
@@ -787,6 +866,16 @@ export class Game {
       if (a.current !== 'Swat') this.animByVel(a, Math.PI);
       if (this.state === 'AIR' && a.data.jumper) a.face(this.ball.pos);
     }
+  }
+
+  /** Each down lineman's plan for the snap: who he's on, which move, when, and whether it wins. The play's sacker wins just before he closes. */
+  private dlPlan(a: Actor, sacker: boolean, OL: Actor[]) {
+    const man = OL.reduce((m, o) => (Math.abs(o.pos.x - a.pos.x) < Math.abs(m.pos.x - a.pos.x) ? o : m));
+    const moves = ['Swim', 'Rip', 'Spin', 'BullRush'];
+    const move = sacker ? moves[Math.floor(this.rng() * 3)] : moves[Math.floor(this.rng() * 4)];
+    const side = sacker ? Math.sign(a.pos.x || 1) : this.rng() < 0.5 ? -1 : 1;
+    return { man, move, side, dx: THREE.MathUtils.clamp(a.pos.x - man.pos.x, -0.4, 0.4), win: sacker || this.rng() < 0.3,
+      at: sacker ? Math.max(0.5, this.sackT - 1.4) : 0.7 + this.rng() * 1.4, fired: false };
   }
 
   private pocket(dt: number) {
@@ -1177,6 +1266,17 @@ export class Game {
     A.quaternion.slerp(tq, k);
   }
 
+  private static hands = new WeakMap<Actor, THREE.Object3D | undefined>();
+  private ballToHand(a: Actor) {
+    if (!Game.hands.has(a)) Game.hands.set(a, a.bones.find(b => b.name === 'hand_R'));
+    const hb = Game.hands.get(a); if (!hb) return;
+    a.obj.updateMatrixWorld(true);
+    const fb = this.w.football;
+    hb.getWorldPosition(fb.position); hb.getWorldQuaternion(fb.quaternion);
+    fb.position.add(new THREE.Vector3(0, 0.09, 0.03).applyQuaternion(fb.quaternion));
+    this.ball.pos.copy(fb.position); fb.visible = true;
+  }
+
   private toDead() { this.state = 'DEAD'; this.t = 0; this.w.fpArm.visible = false; }
 
   private touchdown(c: Actor) {
@@ -1203,7 +1303,12 @@ export class Game {
     this.w.post.mat.uniforms.uFlash.value = 0.25;
     this.h.rumble([[220, 1, 180], [120, 0, 0], [220, 1, 180], [120, 0, 0], [400, 1, 120]], true);
     for (const p of ELIGIBLE) if (this.off.get(p) !== c && this.off.get(p)!.pos.distanceTo(c.pos) < 25) { this.off.get(p)!.data.done = true; this.off.get(p)!.play('Celebrate', 0.3); }
-    for (const d of this.def.values()) { d.vel.set(0, 0, 0); d.data.done = true; if (d.current === 'Run' || d.current === 'Backpedal') d.play('Idle', 0.4); }
+    [...this.def.values()].sort((p, q) => p.pos.distanceTo(c.pos) - q.pos.distanceTo(c.pos)).forEach((d, i) => {
+      d.vel.set(0, 0, 0); d.data.done = true; d.play('Idle', 0.4);
+      d.data.sad = i === 0 ? 'Kneel' : i === 1 ? 'KickTurf' : i % 3 === 0 ? 'DropReact' : 'Dejected';
+      d.data.sadT = (i < 2 ? 0.5 : 0.3 + this.rng() * 1.4);
+      if (i < 3) d.face(c.pos); else d.heading = this.rng() * Math.PI * 2;
+    });
   }
 
   private cutscene(dt: number) {
@@ -1214,6 +1319,9 @@ export class Game {
     cam.position.lerp(new THREE.Vector3(c.pos.x + Math.sin(a) * r, 1.4 + this.t * 0.25, c.pos.z + Math.cos(a) * r), Math.min(1, dt * 3));
     this.lookAt.lerp(c.pos.clone().setY(1.3), Math.min(1, dt * 4));
     cam.up.set(0, 1, 0);
+    for (const d of this.def.values()) if (d.data.sadT !== undefined && (d.data.sadT -= dt) <= 0) {
+      d.data.sadT = undefined; d.play(d.data.sad, 0.35, 0.8 + this.rng() * 0.35, d.data.sad !== 'Dejected');
+    }
     if (this.t > 2.2 && this.t - dt <= 2.2) { this.startReplay(this.tdT - 4.5, this.tdT + 1); if (!this.replay) this.w.jumboLive(); }
     if (this.t > 3) this.w.mosaicTarget = 1;
     if (this.t > 7.5) this.driveOver('TOUCHDOWN');
@@ -1270,7 +1378,7 @@ export class Game {
     this.ballOn = Math.min(99, this.ballOn - r.yards);
     if (r.yards >= this.toGo) { this.down = 1; this.toGo = Math.min(10, this.ballOn); }
     else { this.down++; this.toGo -= r.yards; }
-    if (this.clock <= 0) return this.clockOut();
+    if (this.clock <= 0) { this.clock = 0; if (this.nextQtr() !== 'go') return; }
     if (this.down > 4) return this.driveOver('TURNOVER ON DOWNS');
     if (r.yards >= 10 || r.kind === 'catch') this.audio.playMusic('wabash', false, 0.8);
     this.toPresnap();
@@ -1551,8 +1659,8 @@ export class Game {
     const drive = 1 - this.ballOn / 45;
     const late = this.down >= 3 ? 0.2 : 0;
     const playing = this.state !== 'TITLE' && this.state !== 'OVER';
-    const clutchT = (this.down === 4 ? 0.3 : 0) + (this.toGo < 3 && this.down > 1 ? 0.15 : 0) + (this.clock < 30 ? 0.3 : this.clock < 60 ? 0.12 : 0);
-    const clutchO = (this.down === 4 ? 0.25 : 0) + (this.clock < 30 ? 0.2 : 0);
+    const clutchT = (this.down === 4 ? 0.3 : 0) + (this.toGo < 3 && this.down > 1 ? 0.15 : 0) + (this.qtr === 4 ? (this.clock < 30 ? 0.3 : this.clock < 60 ? 0.12 : 0) : 0);
+    const clutchO = (this.down === 4 ? 0.25 : 0) + (this.qtr === 4 && this.clock < 30 ? 0.2 : 0);
     let tex = playing ? 0.25 + 0.25 * drive + late + 0.15 * this.pressure + clutchT : 0.3;
     let ou = playing ? 0.18 + (this.down >= 3 ? 0.18 : 0) + 0.2 * this.pressure + clutchO : 0.2;
     if (this.state === 'OVER') { tex = this.win ? 1 : 0.05; ou = this.win ? 0.05 : 1; }

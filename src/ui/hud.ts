@@ -48,7 +48,7 @@ export function makeHud(buzz: (ms: number, amp?: number) => void, rumble: Hooks[
       $('sClock').textContent = `${Math.floor(c / 60)}:${String(c % 60).padStart(2, '0')}`;
       $('sDown').textContent = `${ORD[Math.min(4, g.down)]} & ${g.toGo >= g.ballOn ? 'GOAL' : g.toGo}`;
       { const [own, opp] = g.offTeam === 'tex' ? ['TEX', 'OU'] : ['OU', 'TEX']; $('sSpot').textContent = g.ballOn > 50 ? `${own} ${100 - g.ballOn}` : `${opp} ${g.ballOn}`; }
-      $('sQtr').textContent = g.mode === '1v1' ? (g.half === 1 ? '1ST HALF' : '2ND HALF') : '4TH';
+      $('sQtr').textContent = ORD[g.qtr] ?? '4TH';
       $('sTO').textContent = '●'.repeat(g.timeouts) + '○'.repeat(3 - g.timeouts);
     },
     buzz,
@@ -81,7 +81,7 @@ export function makeHud(buzz: (ms: number, amp?: number) => void, rumble: Hooks[
           ? `<div class="enter"><h2>ENTER INITIALS</h2><div class="ini">${e.letters.map((l, i) => `<span class="${i === e.idx ? 'sel' : ''}">${String.fromCharCode(65 + l)}</span>`).join('')}</div>
              <p class="still">STICK UP / DOWN · ZR TO LOCK IN (OR TYPE)</p></div>`
           : boardHtml(g.board(), g.savedRank, 10);
-        el.innerHTML = `<div class="big">${g.mode === '1v1' ? (g.tex === g.ou ? 'TIE GAME' : g.tex > g.ou ? 'TEXAS WINS' : 'OKLAHOMA WINS') : g.win ? 'TEXAS WINS' : 'OU HOLDS ON'}</div><h2>${g.mode === '1v1' ? `TEX ${g.tex} - OU ${g.ou}` : g.win ? `${g.tex} - ${g.ou}` : g.overReason}</h2>
+        el.innerHTML = `<div class="big">${g.tex === g.ou ? 'TIE GAME' : g.tex > g.ou ? 'TEXAS WINS' : 'OKLAHOMA WINS'}</div><h2>TEX ${g.tex} - OU ${g.ou}</h2>
           <div class="row">${card}${right}${clipHtml(g)}</div>${e ? '' : '<p>HOLD ZR (OR CLICK) TO PLAY AGAIN</p>'}`;
       }
       el.classList.add('on');
