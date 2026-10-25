@@ -64,6 +64,8 @@ def bench(name, loc=(0, 0, 0), team='#BF5700'):
 
 
 CALM_ARMS = [[(0.19, 0, 0.66), (0.23, -0.07, 0.46), (0.07, -0.2, 0.52)], [(-0.19, 0, 0.66), (-0.23, -0.07, 0.46), (-0.07, -0.2, 0.52)]]
+CHEER_CALM = [[(0.19, 0, 0.66), (0.27, 0.02, 0.5), (0.17, -0.03, 0.38)], [(-0.19, 0, 0.66), (-0.27, 0.02, 0.5), (-0.17, -0.03, 0.38)]]
+CHEER_HYPE = [[(0.19, 0, 0.66), (0.33, -0.04, 0.9), (0.45, -0.02, 1.12)], [(-0.19, 0, 0.66), (-0.33, -0.04, 0.9), (-0.45, -0.02, 1.12)]]
 HYPE_ARMS = [[(0.19, 0, 0.66), (0.27, -0.06, 0.92), (0.25, -0.04, 1.17)], [(-0.19, 0, 0.66), (-0.27, -0.06, 0.92), (-0.25, -0.04, 1.17)]]
 SIGN_CALM = dict(arms=[[(0.19, 0, 0.66), (0.24, -0.12, 0.6), (0.2, -0.24, 0.78)], [(-0.19, 0, 0.66), (-0.24, -0.12, 0.6), (-0.2, -0.24, 0.78)]],
                  board=(0, -0.27, 0.88))
@@ -74,13 +76,35 @@ SIGN_HYPE = dict(arms=[[(0.19, 0, 0.66), (0.25, -0.08, 0.95), (0.22, -0.12, 1.24
 def fan(name, arms, lift=0.0, board=None, attire=None):
     shirt = lib.mat('crowd_shirt', '#FFFFFF', tex='grime')
     skin = lib.mat('crowd_skin', '#A06E4C', rough=0.8, tex=None)
+    hair = lib.mat('crowd_hair', '#2A1C12', rough=0.9, tex=None)
+    pants = lib.mat('crowd_pants', '#2E3A4E', tex='grime')
+    cheer = attire == 'cheer'
     z = lambda p: (p[0], p[1], p[2] + lift)
-    parts = [lib.loft('torso', z((0, 0, 0.2)), z((0, 0, 0.72)), [(0, .2, .13), (0.6, .21, .12), (1, .17, .1)], 6, shirt),
-             lib.loft('neck', z((0, 0, 0.7)), z((0, 0, 0.78)), [(0, .05, .05), (1, .045, .045)], 4, skin)]
-    hd = lib.sphere('head', 1.0, z((0, -0.01, 0.87)), 6, 5, skin, scale=(0.095, 0.105, 0.115))
-    parts.append(hd)
+    parts = [lib.loft('torso', z((0, 0, 0.2)), z((0, 0, 0.72)), [(0, .19, .13), (0.3, .2, .125), (0.7, .215, .125), (0.9, .2, .11), (1, .13, .085)], 10, shirt),
+             lib.loft('neck', z((0, 0, 0.7)), z((0, 0, 0.78)), [(0, .05, .05), (1, .045, .045)], 6, skin)]
+    hd = lib.sphere('head', 1.0, z((0, -0.01, 0.87)), 10, 8, skin, scale=(0.092, 0.102, 0.115))
+    parts += [hd, lib.sphere('hair', 1.0, z((0, 0.012, 0.905)), 10, 6, hair, scale=(0.098, 0.1, 0.095)),
+              lib.sphere('nose', 0.018, z((0, -0.113, 0.86)), 5, 4, skin)]
+    for x in (1, -1):
+        parts.append(lib.sphere('ear', 1.0, z((0.092 * x, 0, 0.87)), 5, 4, skin, scale=(0.014, 0.022, 0.03)))
+    if cheer:
+        parts.append(lib.tube('ponytail', [z((0, 0.09, 0.93)), z((0, 0.13, 0.84)), z((0, 0.12, 0.72))], [0.035, 0.03, 0.015], 6, hair))
     for pts in arms:
-        parts.append(lib.tube('arm', [z(q) for q in pts], 0.045, 4, shirt))
+        parts.append(lib.tube('arm', [z(q) for q in pts], [0.05, 0.043, 0.038], 6, shirt if not cheer else skin))
+        if cheer:
+            parts.append(lib.sphere('pom', 0.1, z(pts[-1]), 8, 6, lib.mat('crowd_pom', '#FFFFFF', rough=0.95, tex='grime')))
+        else:
+            parts.append(lib.sphere('hand', 0.042, z(pts[-1]), 6, 4, skin))
+    if cheer:   # pleated skirt, bare legs, white shoes
+        for k in range(12):
+            a = 2 * math.pi * k / 12
+            parts.append(lib.box('pleat', (0.065, 0.02, 0.13), z((0.2 * math.cos(a), 0.14 * math.sin(a), 0.17)), shirt, rot=(0, 0, a + math.pi / 2), taper=(1.5, 1)))
+        shoe = lib.mat('crowd_shoe', '#F2F0EA', tex=None)
+        for x in (0.075, -0.075):
+            parts += [lib.tube('leg', [z((x, 0, 0.2)), z((x * 1.05, 0, -0.25)), z((x * 1.1, 0.01, -0.68))], [0.06, 0.048, 0.035], 6, skin),
+                      lib.box('shoe', (0.08, 0.17, 0.06), z((x * 1.1, -0.04, -0.72)), shoe, bevel=0.015)]
+    else:
+        parts.append(lib.loft('hips', z((0, 0, 0.06)), z((0, 0, 0.22)), [(0, .18, .12), (1, .19, .125)], 8, pants))
     if attire == 'cowboy':   # straw/felt hat: brim + crown
         hat = lib.mat('crowd_hat', '#FFFFFF', rough=0.8, tex='grime')
         parts.append(lib.cyl('brim', 0.2, 0.018, z((0, -0.01, 0.955)), 12, hat))
@@ -171,6 +195,9 @@ def build(offset=True):
              bench('bench_texas', (sp * 6, 0, 0), '#BF5700'), bench('bench_ou', (sp * 7, 0, 0), '#841617'),
              crowd_unit('crowd_unit', (sp * 8, 0, 0)), crowd_sign('crowd_sign', (sp * 8.5, 0, 0)),
              crowd_variant('crowd_jersey', 'jersey', (sp * 9, 0, 0)), crowd_variant('crowd_cowboy', 'cowboy', (sp * 9.5, 0, 0))]
+    cheer = with_hype(fan('crowd_cheer', CHEER_CALM, lift=0.75, attire='cheer'), fan('crowd_cheer_h', CHEER_HYPE, lift=0.95, attire='cheer'))
+    cheer.location = (sp * 10, 0, 0)
+    objs.append(cheer)
     c, m = cannon('smokey', (sp * 9, 0, 0))
     return objs + [c, m]
 

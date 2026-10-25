@@ -117,7 +117,17 @@ export class Game {
       if (a.pos.distanceTo(goal) > 0.5) { a.play('Run', 0.2, 1.1); a.heading = Math.atan2(a.vel.x, a.vel.z); } else a.play('Celebrate', 0.3);
     }
     if ((this.fxT -= dt) <= 0) {
-      if (t > 9 && t < 17) { this.w.burst(V(-26 + Math.random() * 2, 1, -59), '#9a9a9a', 60, 2.2, 0.8, 2.2, 3, false); this.fxT = 0.25; }
+      if (t > 9 && t < 17) {   // tunnel run-out: layered smoke billows, backlit orange haze, CO2 jets and sparkler fountains
+        const x = -26 + Math.random() * 2;
+        this.w.burst(V(x, 0.6, -59), ['#8c8c8c', '#a6a39d', '#6f6c68'][Math.floor(Math.random() * 3)], 80, 2.6, 0.9, 2.6 + Math.random(), 3.4, false);
+        this.w.burst(V(x, 1.4, -60), '#d9d4cc', 40, 1.4, 0.5, 4.2, 4.2, false);
+        this.w.burst(V(x, 2, -61), '#FF7A2A', 24, 1.2, 0.3, 5, 2.4, true);
+        for (const dx of [-3.2, 3.2]) {
+          this.w.burst(V(-26 + dx, 0.3, -57.5), '#f2f2f2', 30, 5.5, 2.5, 1.6, 1.4, false);
+          this.w.burst(V(-26 + dx, 0.2, -56), '#FFD27A', 30, 7, -6, 0.35, 1.1, true);
+        }
+        this.fxT = 0.18;
+      }
       else if (t > 24 && t < 31) { const c = ['#FF6A13', '#FFFFFF', '#BF5700', '#FFD27A'][Math.floor(Math.random() * 4)]; this.w.burst(V((Math.random() - 0.5) * 70, 38 + Math.random() * 18, 10 + Math.random() * 50), c); this.fxT = 0.3; this.audio.play('cannon', 0.25, 1.6 + Math.random() * 0.4); }
       else this.fxT = 0.2;
     }

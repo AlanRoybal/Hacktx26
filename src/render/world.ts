@@ -372,6 +372,8 @@ export class World {
     const all = seats.concat(extra);
     const signIdx: number[] = [], fanIdx: number[] = [], jerseyIdx: number[] = [], cowboyIdx: number[] = [];
     seats.slice(0, base).forEach((_, i) => { const r = rnd(); (r < 0.12 ? signIdx : r < 0.27 ? jerseyIdx : r < 0.37 ? cowboyIdx : fanIdx).push(i); });
+    const HAIR = ['#1A120C', '#3B2414', '#6B4A2B', '#0E0E0E', '#A8803F'].map(c => new THREE.Color(c));
+    const PANTS = ['#2E3A4E', '#1C2230', '#5A5246', '#20201E'].map(c => new THREE.Color(c));
     const HATS = ['#C8A672', '#1A1A1A', '#EDE6D6', '#6B4A2B', '#D9C08F'].map(c => new THREE.Color(c));
     const JERSEY_NUMS = [[16, 16, 1, 8, 0, 3], [10, 10, 1, 4, 8, 2]];
     const teamCol = [new THREE.Color('#BF5700'), new THREE.Color('#841617')];
@@ -407,7 +409,7 @@ export class World {
         g.setAttribute('aPhase', new THREE.InstancedBufferAttribute(phase, 4));
         g.setAttribute('aCell', new THREE.InstancedBufferAttribute(cell, 2));
         const src = m.material as THREE.MeshStandardMaterial;
-        const isSign = src.name === 'crowd_sign', isSkin = src.name === 'crowd_skin';
+        const isSign = src.name === 'crowd_sign', isSkin = src.name === 'crowd_skin', own = ['crowd_hair', 'crowd_pants', 'crowd_shoe'].includes(src.name);
         const mat = new THREE.MeshLambertMaterial({ map: src.map, color: isSign ? '#ffffff' : src.color });
         mat.onBeforeCompile = sh => {
           Object.assign(sh.uniforms, this.crowdUniforms);
@@ -432,7 +434,8 @@ export class World {
         const white = new THREE.Color('#F2EEE6');
         mats.forEach((M, k) => {
           im.setMatrixAt(k, M);
-          if (src.name === 'crowd_hat') im.setColorAt(k, hats[k]);
+          if (src.name === 'crowd_hat' || src.name === 'crowd_pom') im.setColorAt(k, hats[k]);
+          else if (own) im.setColorAt(k, src.name === 'crowd_hair' ? HAIR[k % HAIR.length] : src.name === 'crowd_pants' ? PANTS[k % PANTS.length] : new THREE.Color('#F2F0EA'));
           else if (src.name === 'crowd_number' || src.name === 'crowd_stripe') im.setColorAt(k, white);
           else if (!isSign && !isSkin) im.setColorAt(k, shirts[k]);
         });
@@ -448,7 +451,7 @@ export class World {
     build('crowd_cowboy', cowboyIdx);
     const white = new THREE.Color('#EDE9E0');
     build('crowd_cowboy', bandIdx, team => teamCol[team], team => team ? new THREE.Color('#841617') : white);
-    build('crowd_unit', cheerIdx, (team, k) => (k % 2 ? white : teamCol[team]));
+    build('crowd_cheer', cheerIdx, team => teamCol[team], team => (rnd() < 0.5 ? new THREE.Color('#F2EEE6') : teamCol[team]));
     this.buildMosaic(seats.slice(0, base));
   }
 
