@@ -1285,8 +1285,12 @@ export class Game {
     const cock = THREE.MathUtils.clamp(e.x / 1.1, 0, 1);
     const yaw = THREE.MathUtils.clamp(e.y, -0.7, 0.7);
     const breathe = Math.sin(this.t * 2.2) * 0.004;
-    const tp = new THREE.Vector3(ARM_REST.x + 0.06 * cock - 0.12 * yaw, ARM_REST.y + 0.2 * cock + breathe, ARM_REST.z + 0.3 * cock);
-    const tq = new THREE.Quaternion().setFromEuler(new THREE.Euler(e.x * 0.85 + 0.3 * cock, yaw * 0.8, e.z * 0.6 - 0.3 * cock, 'YXZ'));
+    const tp = new THREE.Vector3().lerpVectors(ARM_REST, ARM_COCK, cock);
+    tp.x -= 0.12 * yaw; tp.y += breathe;
+    // cocked: ball up by the helmet, forearm near vertical so the elbow stays down at shoulder height
+    const hq = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.min(0, e.x) * 0.85, yaw * 0.8, e.z * 0.6 * (1 - cock), 'YXZ'));
+    const cq = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw * 0.8).multiply(COCK_Q);
+    const tq = hq.slerp(cq, cock);
     const k = Math.min(1, dt * 28);
     A.position.lerp(tp, k);
     A.quaternion.slerp(tq, k);
@@ -1750,6 +1754,8 @@ export class Game {
 }
 
 const ARM_REST = new THREE.Vector3(0.25, -0.17, -0.7);
+const ARM_COCK = new THREE.Vector3(0.31, 0, -0.42);
+const COCK_Q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.346, -0.57, -0.476, 'YXZ'));
 type ArmKey = { t: number; p: THREE.Vector3; q: THREE.Quaternion };
 const armKey = (t: number, p: [number, number, number], r: [number, number, number]): ArmKey =>
   ({ t, p: new THREE.Vector3(...p), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(r[0], r[1], r[2], 'YXZ')) });
