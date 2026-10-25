@@ -58,23 +58,26 @@ function makePost() {
           vec2 d0 = vUv - .5;
           c *= mix(.7, .22, smoothstep(.0, .7, length(d0)));
           vec2 q = floor(vUv * uUIRes);
-          float row = q.y, tear = step(.992, h(vec2(row * .37, floor(uTime * 9.))));
+          float row = q.y, tear = step(.997, h(vec2(row * .37, floor(uTime * 9.))));
           q.x += tear * floor((h(vec2(row, floor(uTime * 9.))) - .5) * 14.);
           vec4 u = texture2D(tUI, (q + .5) / uUIRes);
-          float wear = h(floor(q / 2.) + 7.3), scratch = step(.985, h(vec2(floor(q.x / 1.), floor(q.y / 40.))));
-          float a = step(.4, u.a) * step(.09, wear) * (1. - scratch * .8);
+          float wear = h(floor(q / 2.) + 7.3), scratch = step(.993, h(vec2(floor(q.x / 1.), floor(q.y / 40.))));
           vec3 uc = u.rgb / max(u.a, .001);
-          uc *= .82 + .18 * h(floor(q / 3.) + 1.7);
+          float ink = step(.4, u.a) * step(.12, max(uc.r, max(uc.g, uc.b)));   // letters get the worn print, dark backing panels stay clean
+          float thick = step(.4, texture2D(tUI, (q + vec2(2.5, .5)) / uUIRes).a) * step(.4, texture2D(tUI, (q + vec2(-1.5, .5)) / uUIRes).a)
+            * step(.4, texture2D(tUI, (q + vec2(.5, 2.5)) / uUIRes).a) * step(.4, texture2D(tUI, (q + vec2(.5, -1.5)) / uUIRes).a);
+          float a = mix(u.a, mix(1., step(.05, wear) * (1. - scratch * .6), thick), ink);   // thin small-print strokes stay solid
+          uc *= mix(1., .86 + .14 * h(floor(q / 3.) + 1.7), ink);
           uc *= .9 + .1 * mod(q.y, 2.);
           vec4 ur = texture2D(tUI, (q + vec2(1.5, .5)) / uUIRes);
-          c += vec3(.35, 0., 0.) * step(.4, ur.a) * (1. - a) * .6;
+          c += vec3(.35, 0., 0.) * step(.4, ur.a) * (1. - ink) * (1. - u.a) * .6;
           c = mix(c, uc, a);
         }
         if (uPixel > .5) {
           vec2 px = floor(vUv*uRes);
           float lv = 32.;
           c = floor(c*lv + bayer(px)*0.9 + .5)/lv;
-          c += (h(px + fract(uTime)*91.) - .5) * .045;
+          c += (h(px + fract(uTime)*91.) - .5) * mix(.045, .012, step(.5, uUI));
         }
         vec2 d = vUv - .5;
         float vig = smoothstep(.85, .25, length(d*vec2(1.1,1.)));

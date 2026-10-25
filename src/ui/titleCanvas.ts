@@ -30,17 +30,17 @@ export function drawTitle(c: CanvasRenderingContext2D, g: Game, kind: 'title' | 
     } else if (value) txt(c, `◀ ${value} ▶`, cx + w / 2 - 14, y, `bold ${size - 4}px ${MONO}`, HOT, 0, '', 0, 'right');
   };
   if (kind === 'pause') {
-    c.fillStyle = 'rgba(0,0,0,.55)'; c.fillRect(0, 0, UI_W, UI_H);
+    c.fillStyle = 'rgba(6,3,2,.86)'; c.fillRect(0, 0, UI_W, UI_H);
     txt(c, 'PAUSED', cx, 78, `64px ${IMPACT}`, '#FFFFFF', 4, ORANGE, 4);
     txt(c, `TEX ${g.tex}   ·   OU ${g.ou}`, cx, 140, `30px ${IMPACT}`, ORANGE, 3, CRIMSON, 2);
     const ck = Math.max(0, Math.ceil(g.clock));
     txt(c, `${['', '1ST', '2ND', '3RD', '4TH'][Math.min(4, g.down)]} & ${g.toGo >= g.ballOn ? 'GOAL' : g.toGo}  ·  ${Math.floor(ck / 60)}:${String(ck % 60).padStart(2, '0')} LEFT`, cx, 172, `bold 14px ${MONO}`, CREAM, 3);
     ['CONTINUE', 'END GAME'].forEach((t, i) => item(t, 214 + i * 34, i === g.pauseSel, 230, 26));
-    txt(c, 'STICK / ARROWS TO MOVE · ZR / ENTER TO SELECT · HOME / ESC TO RESUME', cx, 300, `bold 10px ${MONO}`, '#FFB066', 1);
+    txt(c, 'STICK / ARROWS TO MOVE · ZR / ENTER TO SELECT · HOME / ESC TO RESUME', cx, 300, `bold 11px ${MONO}`, '#FFB066', 0);
     return;
   }
   if (kind === 'handoff') {
-    c.fillStyle = 'rgba(0,0,0,.6)'; c.fillRect(0, 0, UI_W, UI_H);
+    c.fillStyle = 'rgba(6,3,2,.86)'; c.fillRect(0, 0, UI_W, UI_H);
     const LR = (h?: string) => (h === 'L' ? 'LEFT' : 'RIGHT');
     if (g.handoffWhy === 'PICK') {
       const p1 = g.pickN === 1;
@@ -48,8 +48,8 @@ export function drawTitle(c: CanvasRenderingContext2D, g: Game, kind: 'title' | 
       txt(c, `PLAYER ${g.pickN}`, cx, 112, `64px ${IMPACT}`, '#FFFFFF', 4, p1 ? ORANGE : CRIMSON, 4);
       txt(c, p1 ? 'TEXAS QB' : 'OKLAHOMA QB', cx, 168, `30px ${IMPACT}`, p1 ? ORANGE : '#E03A3C', 3, '#000', 2);
       txt(c, 'PULL THE TRIGGER ON THE JOY-CON YOU THROW WITH', cx, 222, `bold 14px ${MONO}`, CREAM, 3);
-      if (!p1) txt(c, `PLAYER 1 HAS THE ${LR(g.hands[1])}  ·  SAME ONE IS FINE, YOU PASS IT AT EACH SWAP`, cx, 250, `bold 11px ${MONO}`, CREAM, 2);
-      txt(c, 'ZR OR ZL  ·  ENTER FOR MOUSE', cx, 288, `bold 12px ${MONO}`, '#FFB066', 1);
+      if (!p1) txt(c, `PLAYER 1 HAS THE ${LR(g.hands[1])}  ·  SAME ONE IS FINE, YOU PASS IT AT EACH SWAP`, cx, 250, `bold 12px ${MONO}`, CREAM, 1);
+      txt(c, 'ZR OR ZL  ·  ENTER FOR MOUSE', cx, 288, `bold 14px ${MONO}`, '#FFB066', 2);
       return;
     }
     const tex = g.offTeam === 'tex';
@@ -60,14 +60,14 @@ export function drawTitle(c: CanvasRenderingContext2D, g: Game, kind: 'title' | 
     txt(c, `TEX ${g.tex}   ·   OU ${g.ou}   ·   ${Math.floor(ck / 60)}:${String(ck % 60).padStart(2, '0')} LEFT`, cx, 210, `bold 16px ${MONO}`, CREAM, 3);
     const h = g.hands[g.qbPlayer];
     txt(c, !h ? 'HAND OVER THE JOY-CONS' : g.sharedPad ? `HAND OVER THE ${LR(h)} JOY-CON` : `PLAYER ${g.qbPlayer}: GRAB THE ${LR(h)} JOY-CON`, cx, 262, `bold 14px ${MONO}`, CREAM, 3);
-    txt(c, `${h === 'L' ? 'ZL' : 'ZR'} / ENTER WHEN READY`, cx, 288, `bold 12px ${MONO}`, '#FFB066', 1);
+    txt(c, `${h === 'L' ? 'ZL' : 'ZR'} / ENTER WHEN READY`, cx, 288, `bold 14px ${MONO}`, '#FFB066', 2);
     return;
   }
   if (m.page === 'home') {
     txt(c, 'RED RIVER', cx, 92, `86px ${IMPACT}`, ORANGE, 4, CRIMSON, 5);
     txt(c, 'TEXAS VS OKLAHOMA · COTTON BOWL · DALLAS', cx, 148, `bold 14px ${MONO}`, '#FDF9D8', 4);
     ['START', '1V1', 'SETTINGS'].forEach((t, i) => item(t, 178 + i * 30, i === m.sel, 230, 24));
-    txt(c, 'STICK / ARROWS TO MOVE · ZR / CLICK / ENTER TO SELECT', cx, 262, `bold 11px ${MONO}`, '#FFB066', 1);
+    txt(c, 'STICK / ARROWS TO MOVE · ZR / CLICK / ENTER TO SELECT', cx, 262, `bold 13px ${MONO}`, '#FFB066', 1);
     const rows = g.board().slice(0, 5);
     if (rows.length) {
       txt(c, 'LEADERBOARD', cx, 282, `bold 12px ${MONO}`, HOT, 4);
@@ -79,7 +79,7 @@ export function drawTitle(c: CanvasRenderingContext2D, g: Game, kind: 'title' | 
     const val = (r: string) => ({ DIFFICULTY: st.difficulty.toUpperCase(), QUALITY: st.quality.toUpperCase(), MUSIC: st.music, ANNOUNCERS: st.voice, CROWD: st.crowd,
       'THROWING HAND': st.hand === 'auto' ? 'AUTO' : st.hand === 'R' ? 'RIGHT' : 'LEFT' } as Record<string, string | number>)[r] ?? '';
     (g.constructor as any).SETTINGS_ROWS.forEach((r: string, i: number) => item(r, 112 + i * 26, i === m.sel, 400, 19, val(r)));
-    txt(c, 'UP / DOWN TO PICK · LEFT / RIGHT TO CHANGE · ZR TO SELECT', cx, 326, `bold 11px ${MONO}`, '#FFB066', 1);
+    txt(c, 'UP / DOWN TO PICK · LEFT / RIGHT TO CHANGE · ZR TO SELECT', cx, 326, `bold 13px ${MONO}`, '#FFB066', 1);
   }
 }
 
