@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Red River QB · Play of the Game</title>
+<meta property="og:title" content="Red River QB · Play of the Game">
+<meta name="theme-color" content="#0a0806">
+<style>
+  @font-face { font-family: px; src: local("Impact"), local("Arial Black"); }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: #0a0806; color: #F2E6D6; font-family: "Courier New", monospace; overflow-x: hidden; }
+  body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding: 28px 16px 40px; min-height: 100vh;
+    background: radial-gradient(ellipse at 50% 40%, #1d1209 0%, #0a0806 70%); }
+  h1 { font: 900 clamp(48px, 14vw, 120px)/0.9 Impact, "Arial Black", sans-serif; letter-spacing: .04em; color: #BF5700; text-shadow: 5px 5px 0 #841617;
+    filter: url(#px); text-align: center; }
+  .sub { font-weight: bold; font-size: clamp(11px, 3vw, 15px); letter-spacing: .35em; color: #FDF9D8; text-align: center; }
+  .tag { font: 900 clamp(22px, 6vw, 40px) Impact, "Arial Black", sans-serif; letter-spacing: .12em; color: #fff; text-shadow: 3px 3px 0 #5E2400; filter: url(#px); }
+  .frame { position: relative; width: min(92vw, 720px); aspect-ratio: 16 / 9; border: 6px solid #BF5700; box-shadow: 8px 8px 0 #841617; background: #000; }
+  .frame img { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+  .frame::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,.28) 0 1px, transparent 1px 3px); }
+  .msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #8a7a68; letter-spacing: .25em; font-weight: bold; text-align: center; padding: 20px; }
+  a.dl { display: inline-block; font: 900 clamp(22px, 6vw, 34px) Impact, "Arial Black", sans-serif; letter-spacing: .14em; color: #fff; text-decoration: none;
+    background: #5E2400; border-left: 8px solid #FF8A2A; padding: 12px 34px; box-shadow: 5px 5px 0 #000; filter: url(#px); }
+  a.dl:active { transform: translate(3px, 3px); box-shadow: 2px 2px 0 #000; }
+  a.dl[hidden] { display: none; }
+  .foot { font-size: 11px; letter-spacing: .3em; color: #FFB066; text-align: center; }
+  canvas#grain { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; mix-blend-mode: overlay; opacity: .35; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute"><filter id="px">
+  <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="1" seed="4" result="n"/>
+  <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.2 1.35" result="holes"/>
+  <feComposite in="SourceGraphic" in2="holes" operator="in"/>
+</filter></svg>
+<h1>RED RIVER</h1>
+<div class="sub">TEXAS VS OKLAHOMA · COTTON BOWL · DALLAS</div>
+<div class="tag">PLAY OF THE GAME</div>
+<div class="frame"><img id="clip" alt="Play of the game"><div class="msg" id="msg">LOADING YOUR PLAY…</div></div>
+<a class="dl" id="dl" download="red-river-play-of-the-game.gif" hidden>DOWNLOAD</a>
+<div class="foot">RED RIVER QB · HACKTX 2026</div>
+<canvas id="grain" width="160" height="90"></canvas>
+<script>
+  const id = new URLSearchParams(location.search).get('c') || '';
+  const img = document.getElementById('clip'), msg = document.getElementById('msg'), dl = document.getElementById('dl');
+  if (!/^[a-z0-9]{6,32}$/.test(id)) msg.textContent = 'NO PLAY FOUND · SCAN THE CODE AT THE TABLE';
+  else {
+    const src = `/c/${id}.gif`;
+    img.onload = () => { msg.remove(); dl.href = src; dl.hidden = false; };
+    img.onerror = () => { msg.textContent = 'THIS PLAY IS STILL ON ITS WAY · REFRESH IN A FEW SECONDS'; };
+    img.src = src;
+  }
+  // share sheet on phones that support files, plain download otherwise
+  dl.addEventListener('click', async e => {
+    if (!navigator.canShare) return;
+    try {
+      const f = new File([await (await fetch(dl.href)).blob()], 'red-river-play-of-the-game.gif', { type: 'image/gif' });
+      if (navigator.canShare({ files: [f] })) { e.preventDefault(); await navigator.share({ files: [f], title: 'Red River QB · Play of the Game' }); }
+    } catch {}
+  });
+  const g = document.getElementById('grain'), c = g.getContext('2d'), d = c.createImageData(160, 90);
+  (function noise() { for (let i = 0; i < d.data.length; i += 4) { const v = Math.random() * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
+    c.putImageData(d, 0, 0); setTimeout(() => requestAnimationFrame(noise), 80); })();
+</script>
+</body>
+</html>
