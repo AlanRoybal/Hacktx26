@@ -237,10 +237,15 @@ export class World {
       if (!m.isMesh) return;
       const mat = m.material as THREE.MeshStandardMaterial;
       let bt = false; m.traverseAncestors(a => { bt ||= a.name === 'big_tex'; });
-      if (bt || m.name.startsWith('big_tex')) { mat.fog = false; mat.emissive.copy(mat.color); mat.emissiveMap = mat.map; mat.emissiveIntensity = 0.9; return; }   // floodlit at night
+      if (bt || m.name.startsWith('big_tex')) { mat.fog = false; mat.emissive.copy(mat.color); mat.emissiveMap = mat.map; mat.emissiveIntensity = 0.18; return; }   // floodlit at night
       if (mat.emissiveIntensity > 0 && mat.emissive.getHex()) { mat.fog = false; mat.emissiveIntensity = 4; this.fairLights.push(mat); }
     });
     this.env.add(fair.scene);
+    for (const [x, z, c] of [[52, 150, '#FFE9C8'], [92, 152, '#FFD9A8'], [70, 140, '#FFFFFF']] as const) {   // Big Tex floodlights from the fairgrounds
+      const L = new THREE.SpotLight(c, 1600, 140, THREE.MathUtils.degToRad(22), 0.5, 1.2);
+      L.position.set(x, 3, z); L.target.position.set(70, 30, 175);
+      this.env.add(L, L.target);
+    }
     stadium.scene.traverse(o => {
       const m = o as THREE.Mesh;
       if (!m.isMesh) return;
