@@ -1,7 +1,8 @@
 /** Web Audio graph: music / crowd / sfx buses -> compressor. Crowd opens up (gain + low-pass) with the pulse. */
 const CLIPS = ['crowd_bed', 'crowd_roar', 'crowd_ooh', 'crowd_boo', 'texas_fight', 'eyes_of_texas', 'wabash', 'march_grandioso',
   'boomer_sooner', 'cannon', 'whistle', 'hit_pads', 'whoosh', 'catch_thud', 'heartbeat', 'horn', 'cadence',
-  'grunt', 'grunt2', 'helmet_hit', 'thud', 'ear_ring'] as const;
+  'grunt', 'grunt2', 'helmet_hit', 'thud', 'ear_ring', 'booth_intro', 'bigtex_howdy',
+  'qb_cadence_0', 'qb_cadence_1', 'qb_cadence_2', 'qb_cadence_3'] as const;
 export type Clip = typeof CLIPS[number];
 // broadcast calls: public/audio/call_<kind>_<i>.ogg
 const CALLS = { td: 3, int: 2, sack: 2, big: 2, catch: 2, first: 2, drop: 2, pbu: 2, inc: 1, flag: 1, fourth: 2, final: 1,

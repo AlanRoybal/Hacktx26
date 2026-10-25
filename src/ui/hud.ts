@@ -24,7 +24,7 @@ function boardHtml(rows: BoardRow[], me: number, n = 5) {
 }
 
 export function makeHud(buzz: (ms: number, amp?: number) => void, rumble: Hooks['rumble']): Hooks {
-  $('plays').innerHTML = PLAYS.map((p, i) => `<div class="card" id="card${i}"><h3>${p.name}<span class="k">${i + 1}</span></h3><p>${p.desc}</p>${routeSvg(i)}</div>`).join('');
+  $('plays').innerHTML = PLAYS.map((p, i) => `<div class="card" id="card${i}"><h3>${p.name}<span class="k">${i < 4 ? i + 1 : ''}</span></h3><p>${p.desc}</p>${routeSvg(i)}</div>`).join('');
   return {
     banner(text, sub = '', color = '#BF5700') {
       $('bMain').textContent = text; $('bSub').textContent = sub;
@@ -73,7 +73,11 @@ export function makeHud(buzz: (ms: number, amp?: number) => void, rumble: Hooks[
     },
     plays(sel, show) {
       $('plays').classList.toggle('on', show);
-      PLAYS.forEach((_, i) => $(`card${i}`).classList.toggle('sel', i === sel));
+      const N = PLAYS.length;
+      PLAYS.forEach((_, i) => {
+        const d = ((i - sel) % N + N + 2) % N;   // show a window of 5 cards centred on the selection
+        const c = $(`card${i}`); c.classList.toggle('sel', i === sel); c.style.display = d < 5 ? '' : 'none'; c.style.order = String(d);
+      });
     },
   };
 }

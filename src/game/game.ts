@@ -86,6 +86,7 @@ export class Game {
   private scr = { pos: v3(), vel: v3(), side: 1 };
   private benchT = 0;
   private deadHold = 1.8;
+  private cadT = 0;
   private throwT0 = 0;
   private tdT = 0;
   private sackPlayT = -1;
@@ -160,6 +161,7 @@ export class Game {
     this.setupPlay();
     this.h.plays(this.playIdx, true);
     this.h.hud(this);
+    this.cadT = 2.6;
     this.audio.duck(true);
     this.w.mosaicTarget = this.rng() < (this.down >= 3 || this.clock < 30 ? 0.5 : 0.15) ? 1 : 0;
     const ord = ['', '1ST', '2ND', '3RD', '4TH'][this.down];
@@ -180,6 +182,7 @@ export class Game {
     if (this.state !== 'PRESNAP') return;
     this.playIdx = (i + PLAYS.length) % PLAYS.length;
     this.setupPlay();
+    this.cadT = this.t + 0.9;
     this.h.plays(this.playIdx, true);
   }
 
@@ -246,7 +249,7 @@ export class Game {
   }
 
   snap() {
-    this.state = 'SNAP'; this.t = 0; this.playT = 0;
+    this.state = 'SNAP'; this.t = 0; this.playT = 0; this.cadT = 0;
     this.rec = []; this.recT = []; this.recAcc = 0; this.replay = null; this.stopClock = false; this.clockRunning = false;
     this.h.plays(this.playIdx, false);
     this.w.mosaicTarget = 0;
@@ -397,6 +400,10 @@ export class Game {
       this.w.camera.lookAt(0, 0, 0);
     }
     if (s === 'PRESNAP') this.presnapIdle();
+    if (s === 'PRESNAP' && this.cadT && this.t > this.cadT) {   // QB barks the cadence once the play is set
+      this.cadT = 0;
+      this.audio.play(`qb_cadence_${Math.floor(this.rng() * 4)}` as Clip, 1.1);
+    }
     if (s === 'SNAP') {
       const f = Math.min(1, this.t / 0.35);
       const hand = this.handPos();
