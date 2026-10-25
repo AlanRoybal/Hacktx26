@@ -177,6 +177,14 @@ def build_body(M, number, sfx=''):
         add(limb_w(tp, f'forearm_{s}'))
         hd = lib.loft(f'glove_{s}', wr, ht, [(0.0, .03, .04), (0.45, .028, .05), (0.8, .022, .046), (1.0, .015, .03)], 8, M['gloves'])
         add(limb_w(hd, f'hand_{s}'))
+        hv, wv = Vector(ht), Vector(wr)
+        for f in range(4):   # separate gloved fingers, slightly curled
+            o = (f - 1.5) * 0.017
+            b0 = wv.lerp(hv, 0.55) + Vector((0, o * 1.4, 0))
+            b1 = wv.lerp(hv, 1.05 - 0.06 * abs(f - 1.5)) + Vector((-0.004 * x, o * 1.5 - 0.006, 0))
+            b2 = b1 + (hv - wv).normalized() * 0.022 + Vector((0.006 * x, -0.012, 0))
+            fg = lib.tube(f'glove_f{f}_{s}', [b0, b1, b2], [0.0105, 0.0095, 0.0085], 6, M['gloves'], joints=True)
+            add(fg, bone=f'hand_{s}')
         th = Vector(wr) + Vector((-0.012 * x, -0.035, -0.03))
         tb = lib.loft(f'thumb_{s}', th, th + Vector((-0.01 * x, -0.025, -0.055)), [(0, .014, .014), (1, .01, .01)], 6, M['gloves'])
         add(limb_w(tb, f'hand_{s}'))
@@ -202,6 +210,13 @@ def build_body(M, number, sfx=''):
     hdm = lib.sphere('head', 1.0, (0, -0.005, 1.735), 12, 8, M['skin'], scale=(0.095, 0.105, 0.115))
     lib.apply(hdm)
     add(lib.smooth(hdm), bone='head')
+    for x in (1, -1):
+        add(lib.sphere(f'num_eye{x}', 0.011, (0.034 * x, -0.098, 1.752), 8, 6, M['sole']), bone='head')
+        add(lib.box(f'num_eyeblack{x}', (0.03, 0.006, 0.012), (0.035 * x, -0.1, 1.728), M['sole']), bone='head')
+        add(lib.sphere(f'num_ear{x}', 1.0, (0.094 * x, 0.0, 1.735), 8, 6, M['skin'], scale=(0.012, 0.024, 0.032)), bone='head')
+        add(lib.box(f'num_brow{x}', (0.032, 0.008, 0.008), (0.034 * x, -0.1, 1.77), M['sole'], rot=(0, math.radians(-8 * x), 0)), bone='head')
+    add(lib.loft('num_nose', (0, -0.1, 1.745), (0, -0.118, 1.712), [(0, .01, .008), (1, .016, .014)], 8, M['skin']), bone='head')
+    add(lib.box('num_mouth', (0.034, 0.005, 0.006), (0, -0.1, 1.69), M['sole']), bone='head')
     add(decal('num_front', 1.33, 0.2, 0.19, number, False, M['numbers']), bone='chest', uv=0)
     add(decal('num_back', 1.31, 0.24, 0.23, number, True, M['numbers']), bone='chest', uv=0)
     # nameplate above the back number; game code draws the surname into this material per player
@@ -589,7 +604,7 @@ def make_actions(rig, sfx=''):
 
 
 ARM_PARTS = {'sleeve', 'upperarm', 'forearm', 'tape', 'glove', 'thumb'}
-SHELL = {'torso': (0.011, 6500), 'arm': (0.0075, 2300), 'leg': (0.0095, 2700)}   # voxel size, target tris
+SHELL = {'torso': (0.009, 8500), 'arm': (0.0065, 2800), 'leg': (0.0085, 3200)}   # voxel size, target tris
 
 
 def g3(co, c, r):
@@ -606,6 +621,8 @@ def sculpt(kind, co):
         d += 0.0050 * g3((x, co.y, co.z), (0.29, 0.05, 1.33), (0.05, 0.035, 0.09))      # triceps
         d += 0.0040 * g3((x, co.y, co.z), (0.335, -0.02, 1.09), (0.035, 0.04, 0.06))    # forearm flexors
         d -= 0.0020 * g3((x, co.y, co.z), (0.31, -0.06, 1.17), (0.03, 0.03, 0.03))      # elbow pit
+        d += 0.0016 * math.sin((co.z + 0.4 * co.y) * 2 * math.pi / 0.03) * g3((x, co.y, co.z), (0.29, 0, 1.4), (0.06, 0.08, 0.05))   # sleeve wrinkles
+        d += 0.0030 * g3((x, co.y, co.z), (0.27, 0, 1.45), (0.05, 0.06, 0.04))         # deltoid under the sleeve
     elif kind == 'leg':
         d += 0.0060 * g3((x, co.y, co.z), (0.115, -0.065, 0.78), (0.055, 0.05, 0.14))   # rectus femoris
         d += 0.0060 * g3((x, co.y, co.z), (0.075, -0.05, 0.61), (0.04, 0.04, 0.05))     # vastus medialis teardrop
@@ -617,6 +634,9 @@ def sculpt(kind, co):
     else:
         d += 0.0060 * g3((x, co.y, co.z), (0.08, 0.13, 0.91), (0.08, 0.06, 0.08))       # glutes
         d += 0.0030 * g3((x, co.y, co.z), (0.08, -0.13, 1.36), (0.08, 0.04, 0.06))      # pecs under the jersey
+        d += 0.0014 * math.sin((co.z * 1.4 + x) * 2 * math.pi / 0.05) * g3((x, co.y, co.z), (0.12, -0.12, 1.2), (0.08, 0.05, 0.1))   # jersey drape over the belly
+        d += 0.0012 * math.sin((co.z - x * 0.8) * 2 * math.pi / 0.045) * g3((x, co.y, co.z), (0.12, 0.12, 1.25), (0.1, 0.05, 0.12))   # back folds
+        d += 0.0035 * g3((x, co.y, co.z), (0.09, 0.12, 1.38), (0.06, 0.04, 0.08))       # lats/shoulder blades
         side = min(1.0, max(0.0, (x - 0.1) / 0.06))
         d += 0.0015 * side * math.sin((co.z + 0.3 * co.y) * 2 * math.pi / 0.035) * g3((x, co.y, co.z), (0.15, 0, 1.13), (0.1, 0.2, 0.08))   # tuck folds
     return d
