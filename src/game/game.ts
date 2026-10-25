@@ -137,7 +137,7 @@ export class Game {
   pauseSel = 0;
   togglePause() {
     if (this.paused) return this.resume();
-    if (['TITLE', 'INTRO', 'OVER', 'POTG', 'HANDOFF'].includes(this.state)) return;
+    if (['TITLE', 'OVER', 'POTG'].includes(this.state) || this.entry) return;
     this.paused = true; this.pauseSel = 0;
     this.audio.ctx.suspend();
     this.h.screen('pause', this);
@@ -146,7 +146,7 @@ export class Game {
     if (!this.paused) return;
     this.paused = false;
     this.audio.ctx.resume();
-    this.h.screen('none', this);
+    this.h.screen(this.state === 'HANDOFF' ? 'handoff' : 'none', this);
   }
   pauseMove(d: number) { if (this.paused) { this.pauseSel = (this.pauseSel + d + 2) % 2; this.h.screen('pause', this); } }
   pauseSelect() {
@@ -581,14 +581,16 @@ export class Game {
       const ay = Math.atan2(lead.x - hand.x, lead.z - hand.z);
       const dYaw = Math.abs(Math.atan2(Math.sin(ay - yaw), Math.cos(ay - yaw)));
       const dR = Math.abs(Math.log(Math.max(1, rawR) / Math.max(1, R)));
-      const score = dYaw / THREE.MathUtils.degToRad(18) + dR * 0.6;
-      if (dYaw < THREE.MathUtils.degToRad(18) && dR < 0.8 && (!best || score < best.score)) best = { a, score, p: lead, v: sol.v, th: sol.th, yaw: ay };
+      const over = rawR > R;
+      const score = dYaw / THREE.MathUtils.degToRad(18) + dR * (over ? 0.35 : 0.6);
+      if (dYaw < THREE.MathUtils.degToRad(18) && dR < (over ? 1.7 : 0.8) && (!best || score < best.score)) best = { a, score, p: lead, v: sol.v, th: sol.th, yaw: ay };
     }
     if (best) {
       const k = this.assist * (0.3 + 0.7 * q);
       yaw = yaw + Math.atan2(Math.sin(best.yaw - yaw), Math.cos(best.yaw - yaw)) * k;
-      th = th + (best.th - th) * k;
-      v = v + (best.v - v) * k;
+      const kR = rawR > rangeOf(best.v, best.th, hand.y - 1.3) ? Math.min(1, 0.25 + k * 1.5) : k;
+      th = th + (best.th - th) * kR;
+      v = v + (best.v - v) * kR;
       this.ball.target = best.a;
       this.ball.aim.copy(best.p);
     } else this.ball.target = null;
@@ -820,9 +822,13 @@ export class Game {
           if (L.win) { man.play('Beaten', 0.1, 1, true); this.sfx('grunt2', a.pos, 0.6); }
         }
         const past = man.pos.clone().add(new THREE.Vector3(L.side * 0.95 * k, 0, 0.85 - (L.win ? 1.5 : 0.35) * k));
-        if (L.win && k >= 1) { past.z = Math.max(z - 2.8, past.z - 0.6 * (t - L.at - 0.5)); }
+        if (L.win && k >= 1) {
+          const e = Math.min(1, (t - L.at - 0.5) / 1.2);
+          past.x = man.pos.x + L.side * (0.95 + 2.2 * e); past.z = Math.max(z - 3.4, man.pos.z + 0.85 - 1.5 - 2.2 * e);
+          if (e < 1) a.play('Run', 0.2, 1.1); else if (a.current !== 'Rush') a.play('Rush', 0.25, 0.8);
+        }
         a.pos.lerp(past, Math.min(1, dt * 10)); a.vel.set(0, 0, 0);
-        a.heading = L.move === 'Spin' && k < 1 ? Math.PI + L.side * k * Math.PI * 1.9 : Math.PI;
+        a.heading = L.move === 'Spin' && k < 1 ? Math.PI + L.side * k * Math.PI * 1.9 : L.win && k >= 1 ? Math.PI - L.side * 0.6 : Math.PI;
         if (L.win) { man.data.fight = 'beaten'; man.heading = Math.atan2(a.pos.x - man.pos.x, a.pos.z - man.pos.z); if (k >= 1 && man.current !== 'Beaten') man.play('PassSet', 0.3); }
         else { man.data.fight = 'stone'; man.heading = 0; man.play('Anchor', 0.2); if (k >= 1 && t > L.at + 1.4) { L.at = t + 0.6 + this.rng() * 0.8; L.fired = false; L.side = -L.side; } }
       }
@@ -843,7 +849,7 @@ export class Game {
       let vmax = 8.6;
       if (this.state === 'RUN' && this.carrier) { goal = this.carrier.pos.clone(); vmax = 8.9; }
       else if (this.state === 'AIR' && a.data.jumper) { goal = this.ballLanding(1.3); vmax = 9.2; }
-      else if (c.blitz) { goal = new THREE.Vector3(-1.8, 0, z + 0.7); vmax = 5; }
+      else if (c.blitz) { goal = new THREE.Vector3(-1.8, 0, z + 0.7); vmax = 5; if (a.pos.distanceTo(goal) < 0.5) { a.vel.set(0, 0, 0); a.heading = Math.PI; a.play('Rush', 0.2, 1); continue; } }
       else if (c.man) {
         const jump = this.jumped === c.man;
         if (jump) a.data.jumper = true;
@@ -895,7 +901,11 @@ export class Game {
     const cam = this.w.camera.position;
     const dr = Math.hypot(r.pos.x - cam.x, r.pos.z - cam.z);
     if (dr < 3.2 && this.playT > this.sackT - 0.8) this.tsTarget = 0.45;
-    if (dr < 1.3) this.startSack();
+    if (dr < 1.3) return this.startSack();
+    if (this.playT > 0.8) for (const [k, d] of this.def) {
+      if (d.data.done || Math.hypot(d.pos.x - cam.x, d.pos.z - cam.z) > 1.0) continue;
+      this.rusher = k; return this.startSack();
+    }
   }
 
   private startSack() {
@@ -1489,9 +1499,10 @@ export class Game {
     if (Math.floor((this.t - dt) * 2.6) !== Math.floor(this.t * 2.6)) this.h.rumble([[35, 0.3, 120]]);
     for (const d of this.def.values()) {
       if (d.data.done) continue;
-      const lead = p.clone().addScaledVector(this.scr.vel, 0.35);
+      const dist = Math.hypot(d.pos.x - p.x, d.pos.z - p.z);
+      const lead = p.clone().addScaledVector(this.scr.vel, THREE.MathUtils.clamp(dist / 9, 0, 0.35));
       this.moveTo(d, lead, d.role.startsWith('D') ? 5.6 : 7.4, dt); d.play('Run', 0.2, 1.2); d.face(lead);
-      if (d.pos.distanceTo(p) < 1.05 && this.t > 0.45) return this.startTackled(d);
+      if (dist < 1.3 && this.t > 0.45) return this.startTackled(d);
     }
     if (p.z >= OU_GOAL_Z + 0.5) { this.qbA.setLayer(0); this.carrier = this.qbA; return this.touchdown(this.qbA); }
     if (Math.abs(p.x) > HALF_W) this.endRun(p, true);

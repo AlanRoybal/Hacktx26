@@ -51,6 +51,9 @@ app.whenReady().then(() => {
       contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false,
     },
   });
+  win.webContents.on('before-input-event', (e, input) => {
+    if (input.type === 'keyDown' && input.key === 'Escape') { e.preventDefault(); win.webContents.send('esc'); }
+  });
   if (process.env.RR_URL) win.loadURL(process.env.RR_URL);
   else win.loadFile(join(__dirname, '..', 'dist', 'index.html'));
 });

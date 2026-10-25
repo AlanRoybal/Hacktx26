@@ -171,7 +171,8 @@ function updateUi() {
   const trig = mode === 'joycon' ? (joy.active?.isLeft ? 'ZL' : 'ZR') : 'CLICK';
   const L = joy.active?.isLeft, jc = mode === 'joycon';
   const clockTools = game.clockRunning ? `  ·  ${jc ? (L ? 'DOWN' : 'A') : 'S'} = SPIKE  ·  ${jc ? (L ? '−' : '+') : 'T'} = TIMEOUT (${game.timeouts})` : '';
-  setHint(s === 'PRESNAP' ? `HOLD ${trig} TO HIKE  ·  ${mode === 'joycon' ? 'STICK' : '← →'} TO CHANGE PLAY${clockTools}`
+  const show = hintOn(s);
+  setHint(!show ? '' : s === 'PRESNAP' ? `HOLD ${trig} TO HIKE  ·  ${mode === 'joycon' ? 'STICK' : '← →'} TO CHANGE PLAY${clockTools}`
     : s === 'POCKET' ? `${mode === 'joycon' ? 'STICK TO MOVE  ·  THROW, RELEASE ' + trig + ' AT THE TOP  ·  PUSH STICK UP TO RUN' : 'ARROWS TO MOVE  ·  AIM, FLICK UP, RELEASE  ·  HOLD UP TO RUN'}` : '');
   setPill(joy.connected(), joy.connected() ? `JOY-CON (${joy.active?.isLeft ? 'L' : 'R'}) ${joy.active?.battery ?? ''}` : joy.reconnecting() ? 'RECONNECTING JOY-CON  ·  PRESS ANY BUTTON' : 'MOUSE  ·  ENTER = CONNECT JOY-CON');
   setCross(innerWidth * (mouse.aimX + 1) / 2, innerHeight * (1 - mouse.aimY) / 2, mode === 'mouse' && s === 'POCKET');
@@ -184,6 +185,18 @@ function updateUi() {
   }
 }
 
+function onEsc() { if (game) { audio.start(); game.togglePause(); } }
+(window as any).rr?.onEsc?.(onEsc);
+
+// control hints: only for the first couple of snaps, or when someone stands at the line a while
+let hintS = '', hintT0 = 0, hintN: Record<string, number> = {};
+function hintOn(s: string) {
+  const now = performance.now();
+  if (s !== hintS) { hintS = s; hintT0 = now; hintN[s] = (hintN[s] ?? 0) + 1; if (game.state === 'TITLE') hintN = {}; }
+  const el = (now - hintT0) / 1000;
+  return (hintN[s] <= 2 && el < 5) || (s === 'PRESNAP' && el > 10);
+}
+
 addEventListener('keydown', async e => {
   keys.add(e.key);
   if (!game) return;
@@ -193,7 +206,7 @@ addEventListener('keydown', async e => {
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') return game.entryStep(e.key === 'ArrowUp' ? 1 : -1);
     if (e.key === 'Enter' || e.key === ' ') return game.entryConfirm();
   }
-  if (e.key === 'Escape') return game.togglePause();
+  if (e.key === 'Escape') return onEsc();
   if (game.paused) {
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') game.pauseMove(e.key === 'ArrowUp' ? -1 : 1);
     if (e.key === 'Enter' || e.key === ' ') game.pauseSelect();

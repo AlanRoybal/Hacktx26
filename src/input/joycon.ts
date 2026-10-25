@@ -257,7 +257,7 @@ export class JoyConInput {
     const pitchRel = Math.asin(Math.max(-1, Math.min(1, fwd.y))) * 180 / Math.PI;
     const timing = tr - tPeak;
     const sm = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
-    let speed = 9 + 18 * sm(250, 1600, wPeak);
+    let speed = 8 + 19 * sm(350, 1850, wPeak);
     let launch = Math.min(50, Math.max(3, 8 + 0.9 * pitchRel));
     const terr = Math.max(0, Math.abs(timing) - 40);
     speed *= 1 - Math.min(0.2, terr / 400);
