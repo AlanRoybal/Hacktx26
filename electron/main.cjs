@@ -9,6 +9,8 @@ app.commandLine.appendSwitch('force_high_performance_gpu');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 app.whenReady().then(() => {
+  const icon = join(__dirname, '..', 'build', 'icon.png');
+  if (process.platform === 'darwin') app.dock.setIcon(icon);
   const ses = session.defaultSession;
   // Electron has no HID chooser: pick the first Joy-Con matching the renderer's filter
   ses.on('select-hid-device', (event, details, callback) => {
@@ -43,7 +45,7 @@ app.whenReady().then(() => {
   });
 
   const win = new BrowserWindow({
-    width: 1920, height: 1080, fullscreen: !process.env.RR_WINDOWED, backgroundColor: '#000',
+    width: 1920, height: 1080, fullscreen: !process.env.RR_WINDOWED, backgroundColor: '#000', icon,
     webPreferences: {
       preload: join(__dirname, 'preload.cjs'),
       contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false,
