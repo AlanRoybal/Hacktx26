@@ -27,6 +27,20 @@ app.whenReady().then(() => {
     return join(dir, name);
   });
   ipcMain.on('quit', () => app.quit());
+  // play-of-the-game GIF: keep a local copy, then put it in S3 behind hacktx26.alanroybal.com (uses this Mac's AWS credentials)
+  ipcMain.handle('upload-clip', async (_e, id, bytes) => {
+    if (!/^[a-z0-9]{6,32}$/.test(id)) return 'bad id';
+    const body = Buffer.from(bytes);
+    const dir = join(__dirname, '..', 'clips');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(join(dir, `${id}.gif`), body);
+    try {
+      const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+      await new S3Client({ region: 'us-east-1' }).send(new PutObjectCommand({ Bucket: 'hacktx26-alanroybal-clips', Key: `c/${id}.gif`,
+        Body: body, ContentType: 'image/gif', CacheControl: 'public, max-age=31536000, immutable' }));
+      return 'ok';
+    } catch (err) { console.warn('clip upload', err); return String(err && err.message || err); }
+  });
 
   const win = new BrowserWindow({
     width: 1920, height: 1080, fullscreen: !process.env.RR_WINDOWED, backgroundColor: '#000',

@@ -24,6 +24,13 @@ function boardHtml(rows: BoardRow[], me: number, n = 5) {
     `<tr class="${i === me ? 'me' : ''}"><td>${i + 1}</td><td>${r.n}</td><td>${r.r.toFixed(1)}</td><td>${r.yds} YDS${r.win ? ' · W' : ''}</td></tr>`).join('') + '</table>';
 }
 
+function clipHtml(g: Game) {
+  const c = g.clip;
+  if (!c) return '';
+  if (c.status === 'ready') return `<div class="qr"><img src="${c.qr}"><h2>SCAN TO SAVE YOUR PLAY</h2></div>`;
+  return `<div class="qr"><div class="qrwait">${c.status === 'saving' ? 'SAVING YOUR PLAY…' : 'CLIP SAVED ON THIS MAC'}</div></div>`;
+}
+
 export function makeHud(buzz: (ms: number, amp?: number) => void, rumble: Hooks['rumble']): Hooks {
   $('plays').innerHTML = PLAYS.map((p, i) => `<div class="card" id="card${i}"><h3>${p.name}<span class="k">${i < 4 ? i + 1 : ''}</span></h3><p>${p.desc}</p>${routeSvg(i)}</div>`).join('');
   return {
@@ -69,7 +76,7 @@ export function makeHud(buzz: (ms: number, amp?: number) => void, rumble: Hooks[
              <p class="still">STICK UP / DOWN · ZR TO LOCK IN (OR TYPE)</p></div>`
           : boardHtml(g.board(), g.savedRank, 10);
         el.innerHTML = `<div class="big">${g.win ? 'TEXAS WINS' : 'OU HOLDS ON'}</div><h2>${g.win ? `${g.tex} - ${g.ou}` : g.overReason}</h2>
-          <div class="row">${card}${right}</div>${e ? '' : '<p>HOLD ZR (OR CLICK) TO PLAY AGAIN</p>'}`;
+          <div class="row">${card}${right}${clipHtml(g)}</div>${e ? '' : '<p>HOLD ZR (OR CLICK) TO PLAY AGAIN</p>'}`;
       }
       el.classList.add('on');
     },

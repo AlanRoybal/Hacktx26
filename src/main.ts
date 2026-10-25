@@ -6,9 +6,11 @@ import { Audio } from './audio';
 import { JoyConInput } from './input/joycon';
 import { MouseInput } from './input/mouse';
 import type { InputListener, ThrowEvent } from './input/types';
+import { GIFEncoder, quantize, applyPalette } from 'gifenc';
+import QRCode from 'qrcode';
 import { makeHud, setHint, setPill, setDebug, setCross, loaded, loadingText } from './ui/hud';
 
-declare global { interface Window { __rr: any; rr?: { saveTrace(n: string, t: string): Promise<string>; quit(): void } } }
+declare global { interface Window { __rr: any; rr?: { saveTrace(n: string, t: string): Promise<string>; quit(): void; uploadClip(id: string, bytes: Uint8Array): Promise<string> } } }
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const world = new World(canvas);
@@ -54,10 +56,34 @@ async function boot() {
   game.onSettings = apply;
   game.onConnect = async () => { await joy.connect(true); if (joy.pads.size) mode = 'joycon'; };
   apply(game.settings);
+  game.onPotgEnd = () => saveClip(capFrames.splice(0));
   game.h.screen('title', game);
   loaded();
   joy.connect(false);
   requestAnimationFrame(frame);
+}
+
+const CAP_W = 320, CAP_H = 180, CLIP_SITE = 'https://hacktx26.alanroybal.com/';
+const cap = Object.assign(document.createElement('canvas'), { width: CAP_W, height: CAP_H });
+const capCtx = cap.getContext('2d', { willReadFrequently: true })!;
+let capFrames: Uint8ClampedArray[] = [], capT = 0;
+async function saveClip(frames: Uint8ClampedArray[]) {
+  if (frames.length < 8) return;
+  const refresh = () => { if (game.state === 'OVER' && game.t > 1) game.h.screen('over', game); };
+  game.clip = { status: 'saving' }; refresh();
+  const gif = GIFEncoder();
+  for (const f of frames) {
+    const pal = quantize(f, 256);
+    gif.writeFrame(applyPalette(f, pal), CAP_W, CAP_H, { palette: pal, delay: 66 });
+    await new Promise(r => setTimeout(r, 0));
+  }
+  gif.finish();
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const res = window.rr ? await window.rr.uploadClip(id, gif.bytes()) : 'no electron';
+  if (res !== 'ok') { console.warn('clip', res); game.clip = { status: 'failed' }; return refresh(); }
+  const url = `${CLIP_SITE}?c=${id}`;
+  game.clip = { status: 'ready', url, qr: await QRCode.toDataURL(url, { margin: 1, width: 360, color: { dark: '#0A0806', light: '#F2E6D6' } }) };
+  refresh();
 }
 
 const fpsLog: number[] = [];
@@ -121,6 +147,10 @@ function frame(now: number) {
   }
   while (acc >= STEP) { game.step(STEP); acc -= STEP; }
   world.render(now / 1000);
+  if (game.state === 'POTG' && now - capT > 66 && capFrames.length < 140) {   // ~15 fps GIF of the play of the game
+    capT = now; capCtx.drawImage(world.renderer.domElement, 0, 0, CAP_W, CAP_H);
+    capFrames.push(capCtx.getImageData(0, 0, CAP_W, CAP_H).data);
+  }
   frames++;
   if (now - fpsT > 500) {
     fps = frames * 1000 / (now - fpsT); frames = 0; fpsT = now;

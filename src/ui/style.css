@@ -49,3 +49,5 @@ canvas#c { position: fixed; inset: 0; width: 100vw; height: 100vh; image-renderi
 #screen .menu.set .mi { display: flex; justify-content: space-between; gap: 4vw; font-size: 3vh; } #screen .menu.set b { color: #FF8A2A; }
 
 body.paused #plays, body.paused #hint, body.paused #stat, body.paused #banner { display: none; }
+#screen .qr { display: flex; flex-direction: column; align-items: center; gap: 1.2vh; } #screen .qr img { width: 24vh; height: 24vh; image-rendering: pixelated; border: 6px solid #BF5700; }
+#screen .qr h2 { font-size: 1.8vh; letter-spacing: .3em; color: #FF8A2A; } #screen .qrwait { width: 24vh; height: 24vh; display: flex; align-items: center; justify-content: center; border: 6px dashed #5E2400; color: #8a7a68; font-size: 1.8vh; letter-spacing: .2em; }
