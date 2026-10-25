@@ -158,20 +158,22 @@ export class Game {
     this.audio.ctx.resume();
     this.h.screen(this.state === 'HANDOFF' ? 'handoff' : 'none', this);
   }
-  pauseMove(d: number) { if (this.paused) { this.pauseSel = (this.pauseSel + d + 2) % 2; this.h.screen('pause', this); } }
+  pauseMove(d: number) { if (this.paused) { this.pauseSel = (this.pauseSel + d + 3) % 3; this.h.screen('pause', this); } }
   pauseSelect() {
     if (!this.paused) return;
+    if (this.pauseSel === 2) return this.quitApp();
     const end = this.pauseSel === 1;
     this.resume();
     if (end) this.endGame();
   }
+  quitApp() { const rr = (window as any).rr; if (rr?.quit) rr.quit(); else window.close(); }
   endGame() { this.gameOver(this.tex > this.ou, 'GAME ENDED'); }
   onSettings: (s: Game['settings']) => void = () => {};
   onConnect: () => void = () => {};
   static readonly SETTINGS_ROWS = ['DIFFICULTY', 'QUALITY', 'MUSIC', 'ANNOUNCERS', 'CROWD', 'THROWING HAND', 'CONNECT JOY-CONS', 'BACK'];
   menuMove(d: number) {
     if (this.state !== 'TITLE') return;
-    const n = this.menu.page === 'home' ? 3 : Game.SETTINGS_ROWS.length;
+    const n = this.menu.page === 'home' ? 4 : Game.SETTINGS_ROWS.length;
     this.menu.sel = (this.menu.sel + d + n) % n; this.h.screen('title', this);
   }
   menuAdjust(d: number) {
@@ -189,6 +191,7 @@ export class Game {
   }
   menuSelect() {
     if (this.menu.page === 'home') {
+      if (this.menu.sel === 3) return this.quitApp();
       if (this.menu.sel < 2) { this.mode = this.menu.sel === 0 ? 'solo' : '1v1'; return this.startIntro(); }
       this.menu = { page: 'settings', sel: 0 };
     } else {

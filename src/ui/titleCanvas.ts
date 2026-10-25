@@ -35,7 +35,7 @@ export function drawTitle(c: CanvasRenderingContext2D, g: Game, kind: 'title' | 
     txt(c, `TEX ${g.tex}   ·   OU ${g.ou}`, cx, 140, `30px ${IMPACT}`, ORANGE, 3, CRIMSON, 2);
     const ck = Math.max(0, Math.ceil(g.clock));
     txt(c, `${['', '1ST', '2ND', '3RD', '4TH'][Math.min(4, g.down)]} & ${g.toGo >= g.ballOn ? 'GOAL' : g.toGo}  ·  ${Math.floor(ck / 60)}:${String(ck % 60).padStart(2, '0')} LEFT`, cx, 172, `bold 14px ${MONO}`, CREAM, 3);
-    ['CONTINUE', 'END GAME'].forEach((t, i) => item(t, 214 + i * 34, i === g.pauseSel, 230, 26));
+    ['CONTINUE', 'END GAME', 'EXIT GAME'].forEach((t, i) => item(t, 206 + i * 30, i === g.pauseSel, 230, 24));
     txt(c, 'STICK / ARROWS TO MOVE · ZR / ENTER TO SELECT · HOME / ESC TO RESUME', cx, 300, `bold 11px ${MONO}`, '#FFB066', 0);
     return;
   }
@@ -66,13 +66,13 @@ export function drawTitle(c: CanvasRenderingContext2D, g: Game, kind: 'title' | 
   if (m.page === 'home') {
     txt(c, 'RED RIVER', cx, 92, `86px ${IMPACT}`, ORANGE, 4, CRIMSON, 5);
     txt(c, 'TEXAS VS OKLAHOMA · COTTON BOWL · DALLAS', cx, 148, `bold 14px ${MONO}`, '#FDF9D8', 4);
-    ['START', '1V1', 'SETTINGS'].forEach((t, i) => item(t, 178 + i * 30, i === m.sel, 230, 24));
-    txt(c, 'STICK / ARROWS TO MOVE · ZR / CLICK / ENTER TO SELECT', cx, 262, `bold 13px ${MONO}`, '#FFB066', 1);
+    ['START', '1V1', 'SETTINGS', 'QUIT'].forEach((t, i) => item(t, 172 + i * 26, i === m.sel, 230, 22));
+    txt(c, 'STICK / ARROWS TO MOVE · ZR / CLICK / ENTER TO SELECT', cx, 268, `bold 13px ${MONO}`, '#FFB066', 1);
     const rows = g.board().slice(0, 5);
     if (rows.length) {
-      txt(c, 'LEADERBOARD', cx, 282, `bold 12px ${MONO}`, HOT, 4);
+      txt(c, 'LEADERBOARD', cx, 286, `bold 12px ${MONO}`, HOT, 4);
       rows.forEach((r, i) => txt(c, `${i + 1}  ${r.n.padEnd(3)}  ${r.r.toFixed(1).padStart(5)}  ${String(r.yds).padStart(3)} YDS${r.win ? ' · W' : '    '}`,
-        cx, 298 + i * 13, `bold 12px ${MONO}`, CREAM, 0));
+        cx, 301 + i * 13, `bold 12px ${MONO}`, CREAM, 0));
     }
   } else {
     txt(c, 'SETTINGS', cx, 62, `60px ${IMPACT}`, '#FFFFFF', 4, ORANGE, 4);
