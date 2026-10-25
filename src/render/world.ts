@@ -131,7 +131,7 @@ export class World {
   crowd: CrowdPart[] = [];
   crowdUniforms = { uTime: { value: 0 }, uHypeTex: { value: 0 }, uHypeOU: { value: 0 }, uWave: { value: -10 } };
   mosaicU = { value: 0 };
-  mosaicTarget = 0;
+  mosaicTarget = 1;
   props!: GLTF;
   football!: THREE.Object3D;
   fpArm!: THREE.Group;
@@ -469,9 +469,13 @@ export class World {
     this.buildMosaic(seats.slice(0, base));
   }
 
-  /** Card stunt: the lower end-zone section under the jumbotron holds up cards that form the Freetail Hackers logo. */
+  /** Card stunt: the lower section of each end zone holds up cards that form the Freetail Hackers logo, all game. */
   private buildMosaic(seats: number[][]) {
-    const pts = seats.map(([x, y, z, yaw]) => ({ x, h: z, z: -y, yaw })).filter(p => p.z > 55 && Math.abs(p.x) < 21);
+    const all = seats.map(([x, y, z, yaw]) => ({ x, h: z, z: -y, yaw }));
+    for (const end of [1, -1]) this.buildMosaicEnd(all.filter(p => p.z * end > 55 && Math.abs(p.x) < 21), end);
+  }
+
+  private buildMosaicEnd(pts: { x: number; h: number; z: number; yaw: number }[], end: number) {
     if (!pts.length) return;
     const h0 = Math.min(...pts.map(p => p.h)), band = 10;
     const sel = pts.filter(p => p.h < h0 + band);
@@ -486,17 +490,17 @@ export class World {
       const px = c.getImageData(0, 0, W, H).data;
       const g = new THREE.PlaneGeometry(0.9, 0.75);
       const delay = new Float32Array(sel.length);
-      const mat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+      const mat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, fog: false, toneMapped: false });
       mat.onBeforeCompile = sh => {
         sh.uniforms.uMosaic = this.mosaicU;
         sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aDelay; uniform float uMosaic;')
           .replace('#include <begin_vertex>', '#include <begin_vertex>\nfloat mk = clamp(uMosaic * 1.8 - aDelay, 0., 1.); transformed.y *= mk; transformed.x *= min(1., mk * 3.);');
       };
       const im = new THREE.InstancedMesh(g, mat, sel.length);
-      const orange = new THREE.Color('#BF5700').multiplyScalar(0.8), white = new THREE.Color('#F4EFE6').multiplyScalar(0.85);
+      const orange = new THREE.Color('#BF5700').multiplyScalar(1.1), white = new THREE.Color('#F4EFE6').multiplyScalar(1.25);
       sel.forEach((p, k) => {
         const u = (p.x + 21) / 42, v = 1 - (p.h - h0) / band;
-        const i = (Math.min(H - 1, Math.floor(v * H)) * W + Math.min(W - 1, Math.floor((1 - u) * W))) * 4;
+        const i = (Math.min(H - 1, Math.floor(v * H)) * W + Math.min(W - 1, Math.floor((end > 0 ? 1 - u : u) * W))) * 4;
         const fwd = new THREE.Vector3(Math.sin(p.yaw), 0, Math.cos(p.yaw));
         const pos = new THREE.Vector3(p.x, p.h + 1.2, p.z).addScaledVector(fwd, 0.3);
         im.setMatrixAt(k, new THREE.Matrix4().compose(pos, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), p.yaw), new THREE.Vector3(1, 1, 1)));

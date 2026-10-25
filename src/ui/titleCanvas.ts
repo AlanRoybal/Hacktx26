@@ -39,6 +39,15 @@ export function drawTitle(c: CanvasRenderingContext2D, g: Game, kind: 'title' | 
     txt(c, `${['', '1ST', '2ND', '3RD', '4TH'][Math.min(4, g.down)]} & ${g.toGo >= g.ballOn ? 'GOAL' : g.toGo}  ·  ${Math.floor(ck / 60)}:${String(ck % 60).padStart(2, '0')} LEFT`, cx, 172, `bold 14px ${MONO}`, CREAM, 3);
     ['CONTINUE', 'END GAME'].forEach((t, i) => item(t, 214 + i * 34, i === g.pauseSel, 230, 26));
     txt(c, 'STICK / ARROWS TO MOVE · ZR / ENTER TO SELECT · HOME / ESC TO RESUME', cx, 300, `bold 11px ${MONO}`, '#FFB066', 0);
+    const pads = g.padBatteries();
+    if (!pads.length) txt(c, 'NO JOY-CON CONNECTED', cx, 276, `bold 12px ${MONO}`, DIM, 2);
+    pads.forEach((p, i) => {   // JOY-CON L [####] per pad, 4 blocks = full
+      const w = 150, x = cx - (pads.length * w) / 2 + i * w + 8, y = 276;
+      const col = p.level <= 1 ? '#FF4A3A' : p.level === 2 ? '#FFB066' : '#FFFFFF';
+      txt(c, `JOY-CON ${p.side}`, x, y, `bold 12px ${MONO}`, CREAM, 2, '', 0, 'left');
+      for (let k = 0; k < 4; k++) { c.fillStyle = k < p.level ? col : '#3A2A1E'; c.fillRect(x + 86 + k * 9, y - 5, 7, 10); }
+      if (p.charging) txt(c, '+', x + 126, y, `bold 12px ${MONO}`, '#7CFF7C', 0, '', 0, 'left');
+    });
     return;
   }
   if (kind === 'handoff') {

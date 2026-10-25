@@ -99,7 +99,6 @@ export class Game {
     this.audio.start(); this.h.screen('none', this);
     this.audio.voiceClip('booth_intro', 1);
     [...this.off.values()].forEach((a, i) => { a.pos.set(-26 + (i % 3) * 1.4, 0, -58 - Math.floor(i / 3) * 1.6); a.data = { delay: 9.5 + i * 0.25 }; a.play('Idle', 0.1); });
-    this.w.mosaicTarget = 1;
   }
   private intro(dt: number) {
     const t = this.t, cam = this.w.camera, V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -302,7 +301,7 @@ export class Game {
     o.sub ||= `${n} PLAYS  ·  ${yds} YARDS  ·  ${Math.floor(o.dur / 60)}:${String(o.dur % 60).padStart(2, '0')}`;
     this.oppNext = o;
     this.state = 'OPP'; this.t = 0; this.clockRunning = false;
-    this.h.plays(this.playIdx, false); this.w.fpArm.visible = false; this.w.mosaicTarget = 1;
+    this.h.plays(this.playIdx, false); this.w.fpArm.visible = false;
     this.h.banner(why === 'HALFTIME' ? 'HALFTIME' : 'OKLAHOMA BALL', why === 'HALFTIME' ? `OU RECEIVES  ·  TEX ${this.tex}  OU ${this.ou}` : `SOONERS START AT THEIR OWN ${start}`, '#841617');
     this.w.drawJumbo(['SOONERS', 'DRIVE'], '#841617', '#FDF9D8'); this.jumboUntil = 99;
   }
@@ -345,6 +344,8 @@ export class Game {
   hands: Record<number, 'L' | 'R' | undefined> = {};
   pickN = 0;
   padSide: () => 'L' | 'R' | undefined = () => undefined;
+  /** connected Joy-Cons for the pause screen: battery 0 (empty) .. 4 (full) */
+  padBatteries: () => { side: 'L' | 'R'; level: number; charging: boolean }[] = () => [];
   setHand: (h: 'auto' | 'L' | 'R') => void = () => {};
   get sharedPad() { return !(this.mode === '1v1' && this.hands[1] && this.hands[2] && this.hands[1] !== this.hands[2]); }
   private endHandoff() {
@@ -375,7 +376,6 @@ export class Game {
     this.resetDrive();
     this.setupPlay();
     this.h.screen('title', this);
-    this.w.mosaicTarget = 1;
     this.audio.playMusic('march_grandioso');
   }
 
@@ -414,7 +414,6 @@ export class Game {
     this.h.hud(this);
     this.cadT = 2.6;
     this.audio.duck(true);
-    this.w.mosaicTarget = this.rng() < (this.down >= 3 || this.clock < 30 ? 0.5 : 0.15) ? 1 : 0;
     const ord = ['', '1ST', '2ND', '3RD', '4TH'][this.down];
     const lines = this.clock < 30 ? ['FINAL SECONDS', 'GET LOUD'] : this.down === 4 ? ['4TH DOWN', 'MAKE SOME NOISE']
       : this.toGo < 3 && this.down > 1 ? [`${ord} & ${this.toGo}`, 'MAKE SOME NOISE'] : this.down === 3 ? ['3RD DOWN', 'MAKE SOME NOISE'] : null;
@@ -521,7 +520,6 @@ export class Game {
     this.state = 'SNAP'; this.t = 0; this.playT = 0; this.cadT = 0;
     this.rec = []; this.recT = []; this.recAcc = 0; this.replay = null; this.stopClock = false; this.clockRunning = false;
     this.h.plays(this.playIdx, false);
-    this.w.mosaicTarget = 0;
     this.audio.play('cadence', 0.9);
     this.audio.duck(false);
     this.w.jumboLive();
@@ -1287,9 +1285,9 @@ export class Game {
     const breathe = Math.sin(this.t * 2.2) * 0.004;
     const tp = new THREE.Vector3().lerpVectors(ARM_REST, ARM_COCK, cock);
     tp.x -= 0.12 * yaw; tp.y += breathe;
-    // cocked: ball up by the helmet, forearm near vertical so the elbow stays down at shoulder height
-    const hq = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.min(0, e.x) * 0.85, yaw * 0.8, e.z * 0.6 * (1 - cock), 'YXZ'));
-    const cq = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw * 0.8).multiply(COCK_Q);
+    // cocked: ball lifts and tips back a little; the arm keeps its rest heading so the elbow stays low and in
+    const hq = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.min(0, e.x) * 0.5, yaw * 0.35, e.z * 0.25 * (1 - cock), 'YXZ'));
+    const cq = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw * 0.35).multiply(COCK_Q);
     const tq = hq.slerp(cq, cock);
     const k = Math.min(1, dt * 28);
     A.position.lerp(tp, k);
@@ -1356,7 +1354,6 @@ export class Game {
       d.data.sadT = undefined; d.play(d.data.sad, 0.35, 0.8 + this.rng() * 0.35, d.data.sad !== 'Dejected');
     }
     if (this.t > 2.2 && this.t - dt <= 2.2) { this.startReplay(this.tdT - 4.5, this.tdT + 1); if (!this.replay) this.w.jumboLive(); }
-    if (this.t > 3) this.w.mosaicTarget = 1;
     if (this.t > 7.5) this.driveOver('TOUCHDOWN');
   }
 
@@ -1754,8 +1751,8 @@ export class Game {
 }
 
 const ARM_REST = new THREE.Vector3(0.25, -0.17, -0.7);
-const ARM_COCK = new THREE.Vector3(0.31, 0, -0.42);
-const COCK_Q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.346, -0.57, -0.476, 'YXZ'));
+const ARM_COCK = new THREE.Vector3(0.22, -0.08, -0.56);
+const COCK_Q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.35, 0, 0));
 type ArmKey = { t: number; p: THREE.Vector3; q: THREE.Quaternion };
 const armKey = (t: number, p: [number, number, number], r: [number, number, number]): ArmKey =>
   ({ t, p: new THREE.Vector3(...p), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(r[0], r[1], r[2], 'YXZ')) });

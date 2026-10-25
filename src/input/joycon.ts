@@ -21,6 +21,7 @@ export class JoyCon {
   lastReport = 0;
   reports = 0;
   battery = 0;
+  charging = false;
   stick = [0, 0];
   shoulder = false;
   /** face = A (R) / down (L), menu = plus (R) / minus (L), stickClick = stick press, pause = home (R) / capture (L) */
@@ -96,6 +97,7 @@ export class JoyCon {
     this.lastReport = now;
     this.reports++;
     this.battery = d.getUint8(1) >> 5;
+    this.charging = (d.getUint8(1) & 0x10) !== 0;
     const right = d.getUint8(2), left = d.getUint8(4);
     const trig = this.isLeft ? (left & 0x80) !== 0 : (right & 0x80) !== 0;
     this.shoulder = this.isLeft ? (left & 0x40) !== 0 : (right & 0x40) !== 0;

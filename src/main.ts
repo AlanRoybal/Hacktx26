@@ -54,7 +54,10 @@ async function boot() {
     if (st.quality !== 'auto') world.setQuality(st.quality);
   };
   game.onSettings = apply;
-  game.padSide = () => (joy.connected() && joy.active ? (joy.active.isLeft ? 'L' : 'R') : undefined);
+  game.padBatteries = () => [...joy.pads.values()].filter(p => performance.now() - p.lastReport < 1000)
+  .map(p => ({ side: p.isLeft ? 'L' as const : 'R' as const, level: p.battery, charging: p.charging }))
+  .sort((a, b) => a.side.localeCompare(b.side));
+game.padSide = () => (joy.connected() && joy.active ? (joy.active.isLeft ? 'L' : 'R') : undefined);
   game.setHand = h => { (joy as any).preferHand = h; };
   game.onConnect = async () => { await joy.connect(true); if (joy.pads.size) mode = 'joycon'; };
   apply(game.settings);
