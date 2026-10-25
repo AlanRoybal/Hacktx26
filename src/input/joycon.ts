@@ -30,6 +30,10 @@ export class JoyCon {
   private counter = 0;
   private tPrev = 0;
   private calib: number[][] = [];
+  /** stick rest center (learned from the first reports) and reach per direction: +x, -x, +y, -y */
+  private sc = [2048, 2048];
+  private scN = 0;
+  private sr = [1100, 1100, 1100, 1100];
   isLeft: boolean;
 
   constructor(public dev: HIDDevice, private emit: (jc: JoyCon, s: Sample) => void) {
@@ -102,7 +106,10 @@ export class JoyCon {
     const so = this.isLeft ? 5 : 8;
     const sx = d.getUint8(so) | ((d.getUint8(so + 1) & 0x0f) << 8);
     const sy = (d.getUint8(so + 1) >> 4) | (d.getUint8(so + 2) << 4);
-    this.stick = [(sx - 2048) / 1400, (sy - 2048) / 1400];
+    if (this.scN < 20) { this.scN++; this.sc = this.scN === 1 ? [sx, sy] : [this.sc[0] + (sx - this.sc[0]) / this.scN, this.sc[1] + (sy - this.sc[1]) / this.scN]; }
+    const dx = sx - this.sc[0], dy = sy - this.sc[1], r = this.sr;
+    if (dx > r[0]) r[0] = dx; if (-dx > r[1]) r[1] = -dx; if (dy > r[2]) r[2] = dy; if (-dy > r[3]) r[3] = -dy;
+    this.stick = [dx / (dx >= 0 ? r[0] : r[1]), dy / (dy >= 0 ? r[2] : r[3])];
     for (let k = 0; k < 3; k++) {
       const o = 12 + k * 12;
       const s: Sample = {
