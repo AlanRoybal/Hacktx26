@@ -13,7 +13,7 @@ export interface Hooks {
   hud(g: Game): void;
   buzz(ms: number, amp?: number): void;
   statCard(lines: string[]): void;
-  screen(kind: 'title' | 'over' | 'none', g: Game): void;
+  screen(kind: 'title' | 'over' | 'none' | 'pause' | 'handoff', g: Game): void;
   plays(sel: number, show: boolean): void;
   rumble(steps: [number, number, number][], both?: boolean): void;
 }
@@ -122,11 +122,39 @@ export class Game {
     if (t > 37.5) { this.fromIntro = true; this.start(); }
   }
   menu = { page: 'home' as 'home' | 'settings', sel: 0 };
-  settings = Object.assign({ quality: 'auto', music: 7, voice: 7, crowd: 7, hand: 'auto' }, JSON.parse(localStorage.getItem('rrqb_settings') || '{}')) as
-    { quality: 'auto' | 'low' | 'high'; music: number; voice: number; crowd: number; hand: 'auto' | 'R' | 'L' };
+  settings = Object.assign({ difficulty: 'starter', quality: 'auto', music: 7, voice: 7, crowd: 7, hand: 'auto' }, JSON.parse(localStorage.getItem('rrqb_settings') || '{}')) as
+    { difficulty: 'freshman' | 'starter' | 'heisman'; quality: 'auto' | 'low' | 'high'; music: number; voice: number; crowd: number; hand: 'auto' | 'R' | 'L' };
+  /** Freshman: more time, more open, more aim help. Heisman: faster rush, tighter windows, ball hawks. */
+  get diff() {
+    return ({ freshman: { sack: 1.35, assist: 0.95, sep: 1.3, pick: 0.5 }, starter: { sack: 1, assist: 0.85, sep: 1, pick: 1 },
+      heisman: { sack: 0.8, assist: 0.6, sep: 0.8, pick: 1.4 } })[this.settings.difficulty] ?? { sack: 1, assist: 0.85, sep: 1, pick: 1 };
+  }
+  paused = false;
+  pauseSel = 0;
+  togglePause() {
+    if (this.paused) return this.resume();
+    if (['TITLE', 'INTRO', 'OVER', 'POTG'].includes(this.state)) return;
+    this.paused = true; this.pauseSel = 0;
+    this.audio.ctx.suspend();
+    this.h.screen('pause', this);
+  }
+  resume() {
+    if (!this.paused) return;
+    this.paused = false;
+    this.audio.ctx.resume();
+    this.h.screen('none', this);
+  }
+  pauseMove(d: number) { if (this.paused) { this.pauseSel = (this.pauseSel + d + 2) % 2; this.h.screen('pause', this); } }
+  pauseSelect() {
+    if (!this.paused) return;
+    const end = this.pauseSel === 1;
+    this.resume();
+    if (end) this.endGame();
+  }
+  endGame() { this.gameOver(this.tex > this.ou, 'GAME ENDED'); }
   onSettings: (s: Game['settings']) => void = () => {};
   onConnect: () => void = () => {};
-  static readonly SETTINGS_ROWS = ['QUALITY', 'MUSIC', 'ANNOUNCERS', 'CROWD', 'THROWING HAND', 'CONNECT JOY-CONS', 'BACK'];
+  static readonly SETTINGS_ROWS = ['DIFFICULTY', 'QUALITY', 'MUSIC', 'ANNOUNCERS', 'CROWD', 'THROWING HAND', 'CONNECT JOY-CONS', 'BACK'];
   menuMove(d: number) {
     if (this.state !== 'TITLE') return;
     const n = this.menu.page === 'home' ? 2 : Game.SETTINGS_ROWS.length;
@@ -136,7 +164,8 @@ export class Game {
     if (this.state !== 'TITLE' || this.menu.page !== 'settings') return;
     const s = this.settings, row = Game.SETTINGS_ROWS[this.menu.sel];
     const cyc = <T,>(arr: T[], v: T) => arr[(arr.indexOf(v) + d + arr.length) % arr.length];
-    if (row === 'QUALITY') s.quality = cyc(['auto', 'low', 'high'] as const as unknown as ('auto' | 'low' | 'high')[], s.quality);
+    if (row === 'DIFFICULTY') s.difficulty = cyc(['freshman', 'starter', 'heisman'], s.difficulty);
+    else if (row === 'QUALITY') s.quality = cyc(['auto', 'low', 'high'] as const as unknown as ('auto' | 'low' | 'high')[], s.quality);
     else if (row === 'THROWING HAND') s.hand = cyc(['auto', 'R', 'L'] as ('auto' | 'R' | 'L')[], s.hand);
     else if (row === 'MUSIC') s.music = THREE.MathUtils.clamp(s.music + d, 0, 10);
     else if (row === 'ANNOUNCERS') s.voice = THREE.MathUtils.clamp(s.voice + d, 0, 10);
@@ -270,6 +299,7 @@ export class Game {
       : (cr < 0.3 ? 'MAN' : cr < 0.5 ? 'COVER 2' : cr < 0.7 ? 'COVER 3' : cr < 0.85 ? 'ROBBER' : 'BLITZ');
     this.cover = makeCoverage(this.call, this.play.coverage);
     if (this.call === 'BLITZ') { this.rusher = 'LB1'; this.sackT = Math.min(this.sackT, 2.3 + this.rng() * 0.5); }
+    this.sackT *= this.diff.sack; this.assist = this.diff.assist;
     OFF.forEach(p => this.speedMul.set(p, 0.95 + this.rng() * 0.1));
     for (const [p, a] of this.off) {
       const [x, y] = OFF_SPOT[p];
@@ -312,6 +342,7 @@ export class Game {
   }
 
   onTrigger(down: boolean) {
+    if (this.paused) { if (down) this.pauseSelect(); return; }
     if (down && this.state === 'OVER' && this.entry) { if (this.t > 1.3) this.entryConfirm(); return; }
     if (down && this.state === 'INTRO') { if (this.t > 1) { this.audio.stopVoice(); this.start(); } return; }
     if (down && this.state === 'TITLE') { if (this.t > 0.4) this.menuSelect(); return; }
@@ -894,7 +925,7 @@ export class Game {
     const b = this.ball;
     if (Math.abs(r.pos.x) >= HALF_W) return this.incomplete('OUT OF BOUNDS', b.vel.clone().multiplyScalar(0.6));
     const d = defs.slice().sort((p, q) => p.pos.distanceTo(r.pos) - q.pos.distanceTo(r.pos))[0];
-    const sep = d.pos.distanceTo(r.pos);
+    const sep = d.pos.distanceTo(r.pos) * this.diff.sep;
     const inPhase = chest(d) < wd + 0.35;            // defender has as good a shot at the ball as the receiver
     const v = b.vel.length();
     const bad = 0.3 * b.wobble + 0.2 * (1 - b.q) + 0.25 * Math.max(0, (v - 24) / 6);
@@ -904,6 +935,7 @@ export class Game {
     if (sep < 1.0) { pInt = (inPhase ? 0.34 : 0.12) + bad; pPbu = 0.36; pDrop = 0.1; }
     else if (sep < 2.0) { pInt = (inPhase ? 0.12 : 0.04) + bad * 0.6; pPbu = 0.22; pDrop = 0.1; }
     else { pInt = 0; pPbu = 0; pDrop = 0.05 + bad; }
+    pInt *= this.diff.pick;
     const y = this.rng();
     if (y < pInt) return this.intercept(d);
     if (y < pInt + pPbu) return this.breakup(d, r);

@@ -93,6 +93,8 @@ function frame(now: number) {
   // off-hand and throwing-hand buttons: face = spike, menu = timeout, stick click = scramble
   for (const p of joy.pads.values()) {
     const prev = (p as any)._btn ?? {}, b = p.btn;
+    if (b.pause && !prev.pause) game.togglePause();
+    if (game.paused) { (p as any)._btn = { ...b }; continue; }
     if (b.face && !prev.face) game.spike();
     if (b.menu && !prev.menu) game.callTimeout();
     if (b.stickClick && !prev.stickClick && game.state === 'POCKET') game.scrambleReq = true;
@@ -108,6 +110,14 @@ function frame(now: number) {
     const sy = joy.active.stick[1];
     if (Math.abs(sy) > 0.7 && !(joy as any)._eflick) { (joy as any)._eflick = true; game.entryStep(sy > 0 ? 1 : -1); }
     if (Math.abs(sy) < 0.3) (joy as any)._eflick = false;
+  }
+  if (game.paused) {
+    acc = 0;
+    if (joy.connected() && joy.active) {
+      const sy = joy.active.stick[1], J = joy as any;
+      if (Math.abs(sy) > 0.7 && !J._pflick) { J._pflick = true; game.pauseMove(sy > 0 ? -1 : 1); }
+      if (Math.abs(sy) < 0.3) J._pflick = false;
+    }
   }
   while (acc >= STEP) { game.step(STEP); acc -= STEP; }
   world.render(now / 1000);
@@ -128,7 +138,7 @@ function updateUi() {
   const clockTools = game.clockRunning ? `  ·  ${jc ? (L ? 'DOWN' : 'A') : 'S'} = SPIKE  ·  ${jc ? (L ? '−' : '+') : 'T'} = TIMEOUT (${game.timeouts})` : '';
   setHint(s === 'PRESNAP' ? `HOLD ${trig} TO HIKE  ·  ${mode === 'joycon' ? 'STICK' : '← →'} TO CHANGE PLAY${clockTools}`
     : s === 'POCKET' ? `${mode === 'joycon' ? 'STICK TO MOVE  ·  THROW, RELEASE ' + trig + ' AT THE TOP  ·  PUSH STICK UP TO RUN' : 'ARROWS TO MOVE  ·  AIM, FLICK UP, RELEASE  ·  HOLD UP TO RUN'}` : '');
-  setPill(joy.connected(), joy.connected() ? `JOY-CON (${joy.active?.isLeft ? 'L' : 'R'}) ${joy.active?.battery ?? ''}` : 'MOUSE  ·  ENTER = CONNECT JOY-CON');
+  setPill(joy.connected(), joy.connected() ? `JOY-CON (${joy.active?.isLeft ? 'L' : 'R'}) ${joy.active?.battery ?? ''}` : joy.reconnecting() ? 'RECONNECTING JOY-CON  ·  PRESS ANY BUTTON' : 'MOUSE  ·  ENTER = CONNECT JOY-CON');
   setCross(innerWidth * (mouse.aimX + 1) / 2, innerHeight * (1 - mouse.aimY) / 2, mode === 'mouse' && s === 'POCKET');
   if (debug) {
     const t = joy.lastThrow;
@@ -147,6 +157,12 @@ addEventListener('keydown', async e => {
     if (/^[a-zA-Z]$/.test(e.key)) return game.entryType(e.key);
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') return game.entryStep(e.key === 'ArrowUp' ? 1 : -1);
     if (e.key === 'Enter' || e.key === ' ') return game.entryConfirm();
+  }
+  if (e.key === 'Escape') return game.togglePause();
+  if (game.paused) {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') game.pauseMove(e.key === 'ArrowUp' ? -1 : 1);
+    if (e.key === 'Enter' || e.key === ' ') game.pauseSelect();
+    return;
   }
   if (game.state === 'TITLE') {
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') return game.menuMove(e.key === 'ArrowUp' ? -1 : 1);

@@ -47,3 +47,5 @@ canvas#c { position: fixed; inset: 0; width: 100vw; height: 100vh; image-renderi
 #screen .mi { font: 900 4.6vh Impact, sans-serif; letter-spacing: .12em; color: #8a7a68; padding: .4vh 2vw; border-left: 6px solid transparent; }
 #screen .mi.sel { color: #fff; border-left-color: #BF5700; background: rgba(191,87,0,.25); }
 #screen .menu.set .mi { display: flex; justify-content: space-between; gap: 4vw; font-size: 3vh; } #screen .menu.set b { color: #FF8A2A; }
+
+body.paused #plays, body.paused #hint, body.paused #stat, body.paused #banner { display: none; }

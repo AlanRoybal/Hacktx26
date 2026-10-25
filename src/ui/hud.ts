@@ -55,8 +55,9 @@ export function makeHud(buzz: (ms: number, amp?: number) => void, rumble: Hooks[
       const el = $('screen');
       $('scorebug').style.display = kind === 'title' ? 'none' : 'flex';
       g.w.showUI(false);
+      document.body.classList.toggle('paused', kind === 'pause' || kind === 'handoff');
       if (kind === 'none') { el.classList.remove('on'); return; }
-      if (kind === 'title') { el.classList.remove('on'); drawTitle(g.w.uiCtx, g); g.w.showUI(true); return; }
+      if (kind === 'title' || kind === 'pause' || kind === 'handoff') { el.classList.remove('on'); drawTitle(g.w.uiCtx, g, kind); g.w.showUI(true); return; }
       {
         const s = g.stats;
         const card = `<table><tr><td>COMP / ATT</td><td>${s.comp} / ${s.att}</td></tr><tr><td>PASS YDS</td><td>${s.yds}</td></tr>

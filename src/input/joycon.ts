@@ -23,8 +23,10 @@ export class JoyCon {
   battery = 0;
   stick = [0, 0];
   shoulder = false;
-  /** face = A (R) / down (L), menu = plus (R) / minus (L), stickClick = stick press */
-  btn = { face: false, menu: false, stickClick: false };
+  /** face = A (R) / down (L), menu = plus (R) / minus (L), stickClick = stick press, pause = home (R) / capture (L) */
+  btn = { face: false, menu: false, stickClick: false, pause: false };
+  t0 = performance.now();
+  private onRep = (e: Event) => this.onReport(e as HIDInputReportEvent);
   private counter = 0;
   private tPrev = 0;
   private calib: number[][] = [];
@@ -36,12 +38,14 @@ export class JoyCon {
 
   async start() {
     if (!this.dev.opened) await this.dev.open();
-    this.dev.addEventListener('inputreport', e => this.onReport(e as HIDInputReportEvent));
+    this.dev.addEventListener('inputreport', this.onRep);
     const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
     await this.sub(0x40, [0x01]); await wait(60);   // IMU on
     await this.sub(0x48, [0x01]); await wait(60);   // vibration on
     await this.sub(0x03, [0x30]); await wait(60);   // standard full mode, 0x30 @ ~66 Hz
   }
+
+  stop() { this.dev.removeEventListener('inputreport', this.onRep); }
 
   private sub(cmd: number, args: number[]) {
     const d = new Uint8Array(10 + args.length);
@@ -93,8 +97,8 @@ export class JoyCon {
     this.shoulder = this.isLeft ? (left & 0x40) !== 0 : (right & 0x40) !== 0;
     const shared = d.getUint8(3);
     this.btn = this.isLeft
-      ? { face: (left & 0x01) !== 0, menu: (shared & 0x01) !== 0, stickClick: (shared & 0x08) !== 0 }
-      : { face: (right & 0x08) !== 0, menu: (shared & 0x02) !== 0, stickClick: (shared & 0x04) !== 0 };
+      ? { face: (left & 0x01) !== 0, menu: (shared & 0x01) !== 0, stickClick: (shared & 0x08) !== 0, pause: (shared & 0x20) !== 0 }
+      : { face: (right & 0x08) !== 0, menu: (shared & 0x02) !== 0, stickClick: (shared & 0x04) !== 0, pause: (shared & 0x10) !== 0 };
     const so = this.isLeft ? 5 : 8;
     const sx = d.getUint8(so) | ((d.getUint8(so + 1) & 0x0f) << 8);
     const sy = (d.getUint8(so + 1) >> 4) | (d.getUint8(so + 2) << 4);
@@ -184,14 +188,25 @@ export class JoyConInput {
         try { devs = devs.concat(await hid.requestDevice({ filters: [{ vendorId: NINTENDO, productId: pid }] })); } catch { /* none */ }
       }
     }
+    const now = performance.now();
     for (const d of devs) {
-      if (d.vendorId !== NINTENDO || this.pads.has(String(d.productId))) continue;
+      if (d.vendorId !== NINTENDO || (d.productId !== JC_L && d.productId !== JC_R)) continue;
+      const key = String(d.productId), old = this.pads.get(key);
+      // a napping Joy-Con comes back as a new HID device (or a dead open one): reopen it
+      if (old && (now - old.lastReport < 1500 || now - old.t0 < 3000)) continue;
+      if (old) { old.stop(); if (old.dev !== d && old.dev.opened) await old.dev.close().catch(() => {}); }
+      if (old && d.opened) await d.close().catch(() => {});
       const jc = new JoyCon(d, (j, s) => this.onSample(j, s));
-      this.pads.set(String(d.productId), jc);
+      this.pads.set(key, jc);
+      if (this.active === old) this.active = jc;
       await jc.start().catch(err => console.warn('joycon start', err));
     }
     hid.onconnect = () => this.connect(false);
+    this.poll ??= window.setInterval(() => { if (this.pads.size) this.connect(false); }, 2000);
   }
+  private poll?: number;
+  /** Paired before, but the active pad has gone quiet. */
+  reconnecting() { return this.pads.size > 0 && !this.connected(); }
 
   /** Whichever trigger the player holds becomes the throwing hand; stalled pad hands off after 2 s. */
   private onSample(jc: JoyCon, s: Sample) {

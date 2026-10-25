@@ -12,7 +12,7 @@ function txt(c: CanvasRenderingContext2D, s: string, x: number, y: number, font:
 }
 
 
-export function drawTitle(c: CanvasRenderingContext2D, g: Game) {
+export function drawTitle(c: CanvasRenderingContext2D, g: Game, kind: 'title' | 'pause' | 'handoff' = 'title') {
   c.clearRect(0, 0, UI_W, UI_H);
   const m = g.menu, st = g.settings, cx = UI_W / 2;
   const item = (label: string, y: number, sel: boolean, w: number, size: number, value: string | number = '') => {
@@ -29,6 +29,17 @@ export function drawTitle(c: CanvasRenderingContext2D, g: Game) {
       txt(c, '◀', x0 - 10, y, `bold ${size - 4}px ${MONO}`, HOT); txt(c, '▶', x0 + 96, y, `bold ${size - 4}px ${MONO}`, HOT);
     } else if (value) txt(c, `◀ ${value} ▶`, cx + w / 2 - 14, y, `bold ${size - 4}px ${MONO}`, HOT, 0, '', 0, 'right');
   };
+  if (kind === 'pause') {
+    c.fillStyle = 'rgba(0,0,0,.55)'; c.fillRect(0, 0, UI_W, UI_H);
+    txt(c, 'PAUSED', cx, 78, `64px ${IMPACT}`, '#FFFFFF', 4, ORANGE, 4);
+    txt(c, `TEX ${g.tex}   ·   OU ${g.ou}`, cx, 140, `30px ${IMPACT}`, ORANGE, 3, CRIMSON, 2);
+    const ck = Math.max(0, Math.ceil(g.clock));
+    txt(c, `${['', '1ST', '2ND', '3RD', '4TH'][Math.min(4, g.down)]} & ${g.toGo >= g.ballOn ? 'GOAL' : g.toGo}  ·  ${Math.floor(ck / 60)}:${String(ck % 60).padStart(2, '0')} LEFT`, cx, 172, `bold 14px ${MONO}`, CREAM, 3);
+    ['CONTINUE', 'END GAME'].forEach((t, i) => item(t, 214 + i * 34, i === g.pauseSel, 230, 26));
+    txt(c, 'STICK / ARROWS TO MOVE · ZR / ENTER TO SELECT · HOME / ESC TO RESUME', cx, 300, `bold 10px ${MONO}`, '#FFB066', 1);
+    return;
+  }
+  if (kind === 'handoff') return drawHandoff(c, g, txt);
   if (m.page === 'home') {
     txt(c, 'RED RIVER', cx, 92, `86px ${IMPACT}`, ORANGE, 4, CRIMSON, 5);
     txt(c, 'TEXAS VS OKLAHOMA · COTTON BOWL · DALLAS', cx, 148, `bold 14px ${MONO}`, '#FDF9D8', 4);
@@ -42,9 +53,12 @@ export function drawTitle(c: CanvasRenderingContext2D, g: Game) {
     }
   } else {
     txt(c, 'SETTINGS', cx, 62, `60px ${IMPACT}`, '#FFFFFF', 4, ORANGE, 4);
-    const val = (r: string) => ({ QUALITY: st.quality.toUpperCase(), MUSIC: st.music, ANNOUNCERS: st.voice, CROWD: st.crowd,
+    const val = (r: string) => ({ DIFFICULTY: st.difficulty.toUpperCase(), QUALITY: st.quality.toUpperCase(), MUSIC: st.music, ANNOUNCERS: st.voice, CROWD: st.crowd,
       'THROWING HAND': st.hand === 'auto' ? 'AUTO' : st.hand === 'R' ? 'RIGHT' : 'LEFT' } as Record<string, string | number>)[r] ?? '';
-    (g.constructor as any).SETTINGS_ROWS.forEach((r: string, i: number) => item(r, 120 + i * 28, i === m.sel, 400, 19, val(r)));
+    (g.constructor as any).SETTINGS_ROWS.forEach((r: string, i: number) => item(r, 112 + i * 26, i === m.sel, 400, 19, val(r)));
     txt(c, 'UP / DOWN TO PICK · LEFT / RIGHT TO CHANGE · ZR TO SELECT', cx, 326, `bold 11px ${MONO}`, '#FFB066', 1);
   }
 }
+
+export let drawHandoff = (_c: CanvasRenderingContext2D, _g: Game, _t: typeof txt) => {};
+export const setHandoff = (f: typeof drawHandoff) => { drawHandoff = f; };
