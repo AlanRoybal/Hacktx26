@@ -122,10 +122,14 @@ export class World {
   football!: THREE.Object3D;
   fpArm!: THREE.Group;
   fpBall: THREE.Object3D | null = null;
+  /** Static stadium (stands, crowd, lights, props). Turned 180° so a 1v1 offense drives toward the other end. */
+  env = new THREE.Group();
+  flipped = false;
+  setFlip(f: boolean) { this.flipped = f; this.env.rotation.y = f ? Math.PI : 0; this.env.updateMatrixWorld(true); }
   placeChains(losZ: number, firstDownZ: number) {
     const c = this.propObjs.get('chains'), d = this.propObjs.get('down_marker');
-    if (c) c.position.z = firstDownZ - 10 * YD;
-    if (d) d.position.z = losZ;
+    if (c) c.position.z = this.flipped ? -firstDownZ : firstDownZ - 10 * YD;
+    if (d) d.position.z = this.flipped ? -losZ : losZ;
   }
   propObjs = new Map<string, THREE.Object3D>();
   shake = 0;
@@ -196,6 +200,7 @@ export class World {
     this.scene.background = new THREE.Color('#05070D');
     this.scene.fog = new THREE.FogExp2('#06080f', 0.0105);
     this.scene.add(this.camera);
+    this.scene.add(this.env);
     this.rt.texture.colorSpace = THREE.SRGBColorSpace;
     this.resize();
     addEventListener('resize', () => this.resize());
@@ -221,7 +226,7 @@ export class World {
       if (bt || m.name.startsWith('big_tex')) { mat.fog = false; mat.emissive.copy(mat.color); mat.emissiveMap = mat.map; mat.emissiveIntensity = 0.9; return; }   // floodlit at night
       if (mat.emissiveIntensity > 0 && mat.emissive.getHex()) { mat.fog = false; mat.emissiveIntensity = 4; this.fairLights.push(mat); }
     });
-    this.scene.add(fair.scene);
+    this.env.add(fair.scene);
     stadium.scene.traverse(o => {
       const m = o as THREE.Mesh;
       if (!m.isMesh) return;
@@ -249,7 +254,7 @@ export class World {
         mat.map!.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
       }
     });
-    this.scene.add(stadium.scene);
+    this.env.add(stadium.scene);
     // jumbotron graphic canvas (TOUCHDOWN, 3RD DOWN, MAKE SOME NOISE)
     this.jumboCanvas.width = 640; this.jumboCanvas.height = 360;
     this.jumboGraphic = new THREE.CanvasTexture(this.jumboCanvas);
@@ -279,7 +284,7 @@ export class World {
       c.position.set(at[0], 0, at[1]);
       c.rotation.set(0, at[2], 0);
       this.propObjs.set(n, c);
-      this.scene.add(c);
+      this.env.add(c);
     }
     this.football = ball.scene.getObjectByName('football')!;
     this.football.traverse(o => { (o as THREE.Mesh).castShadow = true; });
@@ -307,7 +312,7 @@ export class World {
     this.scene.add(new THREE.HemisphereLight('#1c2740', '#0b0d08', 0.35));
     const SHOW = [[-30, -92, 14], [25, -94, 14], [-60, -30, 12], [60, -35, 12], [-58, 30, 12], [58, 40, 12], [-20, 95, 14], [30, 92, 14]]
       .map(([x, y, z]) => new THREE.Vector3(x, z, -y));
-    this.scene.add(this.beamFx.group);
+    this.env.add(this.beamFx.group);
     let glow: THREE.Texture | undefined;
     for (let i = 0; i < 4; i++) {
       const lamps = stadium.getObjectByName(`tower_${i}_lamps`)!;
@@ -316,7 +321,7 @@ export class World {
       L.position.copy(head);
       L.target.position.set(head.x * 0.15, 0, head.z * 0.35);
       if (i === 0) { L.castShadow = true; L.shadow.mapSize.set(1024, 1024); L.shadow.camera.near = 40; L.shadow.camera.far = 200; L.shadow.bias = -0.0005; }
-      this.scene.add(L, L.target);
+      this.env.add(L, L.target);
       this.towerLights.push(L);
       glow = this.beamFx.addTower(head, L.target.position, glow);
       for (const tg of [...SHOW].sort((a, b) => a.distanceTo(head) - b.distanceTo(head)).slice(0, 2)) {
@@ -324,7 +329,7 @@ export class World {
         S.position.copy(head);
         S.target.position.copy(tg);
         S.userData.base = tg.clone();
-        this.scene.add(S, S.target);
+        this.env.add(S, S.target);
         this.showLights.push(S);
         this.beamFx.addSpot();
       }
@@ -413,7 +418,7 @@ export class World {
         });
         if (isSkin) idx.forEach((_, k) => im.setColorAt(k, new THREE.Color(['#8A5A3C', '#C08A64', '#5E3B26', '#D9A784'][k % 4]).multiplyScalar(2.2)));
         im.frustumCulled = false;
-        this.scene.add(im);
+        this.env.add(im);
         this.crowd.push({ mesh: im });
       }
     };
@@ -463,7 +468,7 @@ export class World {
       });
       g.setAttribute('aDelay', new THREE.InstancedBufferAttribute(delay, 1));
       im.frustumCulled = false;
-      this.scene.add(im);
+      this.env.add(im);
     };
   }
 

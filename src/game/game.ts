@@ -223,9 +223,9 @@ export class Game {
       a.pos.set(x + (i % 2) * 0.7 * Math.sign(x), 0, -12 + i * 4);
       a.heading = a.obj.rotation.y = team === 'tex' ? Math.PI / 2 : -Math.PI / 2;
       a.data.ph = Math.random(); a.play('Idle', 0.01); a.update(0);
-      this.bench.push(a); w.scene.add(a.obj);
+      this.bench.push(a); w.env.add(a.obj);
     });
-    this.coach = new Actor('coach', 0); this.coach.heading = this.coach.obj.rotation.y = Math.PI / 2; this.coach.play('Idle', 0.01); w.scene.add(this.coach.obj);
+    this.coach = new Actor('coach', 0); this.coach.heading = this.coach.obj.rotation.y = Math.PI / 2; this.coach.play('Idle', 0.01); w.env.add(this.coach.obj);
     this.toTitle();
   }
 
@@ -236,6 +236,7 @@ export class Game {
   /** Swap which roster is on offense. The offense always drives the same way so the QB view and play logic stay put. */
   setPossession(team: 'tex' | 'ou') {
     this.offTeam = team;
+    this.w.setFlip(this.mode === '1v1' && (team === 'ou') !== (this.half === 2));
     const o = this.sides[team], d = this.sides[team === 'tex' ? 'ou' : 'tex'];
     this.off = o.off; this.def = d.def; this.qbA = o.qb;
     for (const sd of Object.values(this.sides)) {
@@ -248,9 +249,22 @@ export class Game {
   get qbPlayer() { return this.offTeam === 'tex' ? 1 : 2; }
   private driveOver(why: string) {
     if (this.mode === 'solo') return this.gameOver(why === 'TOUCHDOWN', why === 'TOUCHDOWN' ? '' : why);
-    if (this.clock <= 0) return this.gameOver(this.tex > this.ou, 'TIME EXPIRED');
+    if (this.clock <= 0) return this.clockOut();
+    this.newDrive(this.defTeam, why);
+  }
+  half = 1;
+  private clockOut() {
+    this.clock = 0;
+    if (this.mode === '1v1' && this.half === 1) {
+      this.half = 2; this.clock = 180; this.timeouts = 3;
+      this.audio.playMusic('march_grandioso', false);
+      return this.newDrive('ou', 'HALFTIME');
+    }
+    this.gameOver(this.mode === '1v1' && this.tex > this.ou, 'TIME EXPIRED');
+  }
+  private newDrive(team: 'tex' | 'ou', why: string) {
     this.handoffWhy = why;
-    this.setPossession(this.defTeam);
+    this.setPossession(team);
     this.down = 1; this.toGo = 10; this.ballOn = 45; this.clockRunning = false;
     this.setupPlay();
     this.state = 'HANDOFF'; this.t = 0;
@@ -260,7 +274,7 @@ export class Game {
   handoffWhy = '';
   private endHandoff() {
     this.h.screen('none', this);
-    this.h.banner(`${this.offName} BALL`, `PLAYER ${this.qbPlayer} AT QB`);
+    this.h.banner(this.handoffWhy === 'HALFTIME' ? '2ND HALF' : `${this.offName} BALL`, this.handoffWhy === 'HALFTIME' ? `${this.offName} BALL  ·  PLAYER ${this.qbPlayer} AT QB` : `PLAYER ${this.qbPlayer} AT QB`);
     this.audio.playMusic(this.offTeam === 'tex' ? 'wabash' : 'boomer_sooner', false, 0.8);
     this.toPresnap();
   }
@@ -282,7 +296,8 @@ export class Game {
 
   resetDrive() {
     Object.assign(this, { clock: 105, down: 1, toGo: 10, ballOn: 45, tex: 27, ou: 31, spikeTex: 0, spikeOU: 0, timeouts: 3, clockRunning: false, stopClock: false, entry: null });
-    if (this.mode === '1v1') Object.assign(this, { clock: 360, tex: 0, ou: 0 });
+    this.half = 1;
+    if (this.mode === '1v1') Object.assign(this, { clock: 180, tex: 0, ou: 0 });
     if (this.sides) this.setPossession('tex');
     this.stats = { att: 0, comp: 0, yds: 0, td: 0, int: 0, sacks: 0, bestSpiral: 1, lastPlay: '', fast: 0, long: 0 };
     this.best = null;
@@ -365,7 +380,7 @@ export class Game {
       r.pos.set(x, 0, r.role === 'HL' || r.role === 'LJ' ? z : z + y * YD); r.vel.set(0, 0, 0); r.heading = r.obj.rotation.y = h; r.data = {}; r.play('Idle', 0.01);
     }
     this.qbA.pos.set(this.qb.x, 0, this.qb.z); this.qbA.heading = this.qbA.obj.rotation.y = 0; this.qbA.data = {}; this.qbA.setLayer(2); this.qbA.play('QBSet', 0.01);
-    this.coach.pos.set(-27.4, 0, THREE.MathUtils.clamp(z, -20, 20)); this.coach.data = {};
+    this.coach.pos.set(-27.4, 0, THREE.MathUtils.clamp(this.w.flipped ? -z : z, -20, 20)); this.coach.data = {};
     this.w.flag.visible = false; this.flagFx = null; this.deadHold = 1.8; this.fwdHold = 0; this.scrambleReq = false;
     this.all.forEach(a => a.update(0)); this.extras.forEach(a => a.update(0));
     this.ball.live = false; this.ball.target = null; this.carrier = null; this.result = null;
@@ -571,7 +586,7 @@ export class Game {
     if (s === 'PRESNAP' && this.clockRunning) {
       this.clock -= dtReal;
       if ((this.hudT += dtReal) > 0.2) { this.hudT = 0; this.h.hud(this); }
-      if (this.clock <= 0) { this.clock = 0; this.gameOver(this.mode === '1v1' && this.tex > this.ou, 'TIME EXPIRED'); }
+      if (this.clock <= 0) this.clockOut();
     }
     if (s === 'POCKET') this.pocket(dt);
     if (s === 'AIR') this.air(dt);
@@ -1124,7 +1139,7 @@ export class Game {
   }
 
   /** Play of the game: the best play so far, with its recorded frames. */
-  best: { rec: Float32Array[]; actors: Actor[]; score: number; label: string; team: string; poss: 'tex' | 'ou' } | null = null;
+  best: { rec: Float32Array[]; actors: Actor[]; score: number; label: string; team: string; poss: 'tex' | 'ou'; flip: boolean } | null = null;
   clip: { status: 'saving' | 'ready' | 'failed'; qr?: string; url?: string } | null = null;
   onPotgEnd: () => void = () => {};
   private potgF = 0;
@@ -1132,7 +1147,7 @@ export class Game {
     const sc = r.kind === 'td' ? 100 + r.yards : r.kind === 'catch' || r.kind === 'run' ? r.yards * 2 : r.kind === 'pi' ? 10 : 0;
     if (sc <= 0 || this.rec.length < 20 || (this.best && this.best.score >= sc)) return;
     const label = r.kind === 'td' ? `${r.yards} YD TOUCHDOWN` : r.kind === 'pi' ? 'DREW THE FLAG' : `${r.yards} YD ${r.kind === 'run' ? 'RUN' : 'CATCH'}`;
-    this.best = { rec: this.rec, actors: this.recActors, score: sc, label, team: this.offName, poss: this.offTeam };
+    this.best = { rec: this.rec, actors: this.recActors, score: sc, label, team: this.offName, poss: this.offTeam, flip: this.w.flipped };
   }
   get offName() { return this.offTeam === 'tex' ? 'TEXAS' : 'OKLAHOMA'; }
   private potg(dtReal: number) {
@@ -1169,7 +1184,7 @@ export class Game {
     this.ballOn = Math.min(99, this.ballOn - r.yards);
     if (r.yards >= this.toGo) { this.down = 1; this.toGo = Math.min(10, this.ballOn); }
     else { this.down++; this.toGo -= r.yards; }
-    if (this.clock <= 0) { this.clock = 0; return this.gameOver(this.mode === '1v1' && this.tex > this.ou, 'TIME EXPIRED'); }
+    if (this.clock <= 0) return this.clockOut();
     if (this.down > 4) return this.driveOver('TURNOVER ON DOWNS');
     if (r.yards >= 10 || r.kind === 'catch') this.audio.playMusic('wabash', false, 0.8);
     this.toPresnap();
@@ -1179,6 +1194,7 @@ export class Game {
   win = false;
   private gameOver(win: boolean, why = '') {
     this.state = 'OVER'; this.t = 0;
+    this.h.plays(this.playIdx, false);
     this.win = win; this.overReason = why;
     this.entry = this.stats.att > 0 && this.mode === 'solo' ? { letters: [0, 0, 0], idx: 0 } : null; this.overT = 0; this.savedRank = -1;
     this.audio.call(win ? 'win' : 'lose', true, 0.8);
@@ -1189,7 +1205,7 @@ export class Game {
     if (!this.replay) this.w.jumboLive();
     this.clip = null;
     if (this.best) {
-      this.state = 'POTG'; this.t = 0; this.replay = null; this.w.jumboLive(); this.setPossession(this.best.poss);
+      this.state = 'POTG'; this.t = 0; this.replay = null; this.w.jumboLive(); this.setPossession(this.best.poss); this.w.setFlip(this.best.flip);
       this.w.fpArm.visible = false; this.w.camera.layers.enable(2);
       this.w.camera.fov = 50; this.w.camera.updateProjectionMatrix();
       this.h.screen('none', this);

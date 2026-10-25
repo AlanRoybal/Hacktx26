@@ -48,6 +48,7 @@ export function makeHud(buzz: (ms: number, amp?: number) => void, rumble: Hooks[
       $('sClock').textContent = `${Math.floor(c / 60)}:${String(c % 60).padStart(2, '0')}`;
       $('sDown').textContent = `${ORD[Math.min(4, g.down)]} & ${g.toGo >= g.ballOn ? 'GOAL' : g.toGo}`;
       { const [own, opp] = g.offTeam === 'tex' ? ['TEX', 'OU'] : ['OU', 'TEX']; $('sSpot').textContent = g.ballOn > 50 ? `${own} ${100 - g.ballOn}` : `${opp} ${g.ballOn}`; }
+      $('sQtr').textContent = g.mode === '1v1' ? (g.half === 1 ? '1ST HALF' : '2ND HALF') : '4TH';
       $('sTO').textContent = '●'.repeat(g.timeouts) + '○'.repeat(3 - g.timeouts);
     },
     buzz,

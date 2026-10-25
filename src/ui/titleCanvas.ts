@@ -42,8 +42,8 @@ export function drawTitle(c: CanvasRenderingContext2D, g: Game, kind: 'title' | 
   if (kind === 'handoff') {
     c.fillStyle = 'rgba(0,0,0,.6)'; c.fillRect(0, 0, UI_W, UI_H);
     const tex = g.offTeam === 'tex';
-    txt(c, g.handoffWhy, cx, 54, `bold 14px ${MONO}`, '#FFB066', 4);
-    txt(c, 'SWITCH QBS', cx, 112, `64px ${IMPACT}`, '#FFFFFF', 4, tex ? ORANGE : CRIMSON, 4);
+    txt(c, g.handoffWhy === 'HALFTIME' ? 'TEAMS SWITCH ENDS' : g.handoffWhy, cx, 54, `bold 14px ${MONO}`, '#FFB066', 4);
+    txt(c, g.handoffWhy === 'HALFTIME' ? 'HALFTIME' : 'SWITCH QBS', cx, 112, `64px ${IMPACT}`, '#FFFFFF', 4, tex ? ORANGE : CRIMSON, 4);
     txt(c, `PLAYER ${g.qbPlayer}  ·  ${g.offName} QB`, cx, 168, `30px ${IMPACT}`, tex ? ORANGE : '#E03A3C', 3, '#000', 2);
     const ck = Math.max(0, Math.ceil(g.clock));
     txt(c, `TEX ${g.tex}   ·   OU ${g.ou}   ·   ${Math.floor(ck / 60)}:${String(ck % 60).padStart(2, '0')} LEFT`, cx, 210, `bold 16px ${MONO}`, CREAM, 3);
