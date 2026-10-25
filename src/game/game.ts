@@ -96,7 +96,7 @@ export class Game {
   /** Pre-game: aerial, smoke tunnel run-out, Big Tex, fireworks, push in to the huddle. Booth voices over the top. */
   startIntro() {
     this.state = 'INTRO'; this.t = 0; this.fxT = 0;
-    this.audio.start(); this.h.screen('none', this);
+    this.audio.start(); this.h.screen('none', this); this.h.hud(this);
     this.audio.voiceClip('booth_intro', 1);
     [...this.off.values()].forEach((a, i) => { a.pos.set(-26 + (i % 3) * 1.4, 0, -58 - Math.floor(i / 3) * 1.6); a.data = { delay: 9.5 + i * 0.25 }; a.play('Idle', 0.1); });
   }
