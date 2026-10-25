@@ -56,3 +56,4 @@ body.potg #plays, body.potg #hint, body.potg #stat, body.potg #banner, body.potg
 body.potg #potg { display: flex; }
 #potg b { font: 900 7vh Impact, "Arial Black", sans-serif; letter-spacing: .06em; color: #fff; text-shadow: .5vh .5vh 0 #BF5700; }
 #potg span { font: bold 2.6vh "Courier New", monospace; letter-spacing: .3em; color: #FF8A2A; background: rgba(0,0,0,.6); padding: .6vh 1.2vh; align-self: flex-start; }
+body.over #plays, body.over #hint, body.over #stat, body.over #banner { display: none; }
