@@ -532,6 +532,36 @@ def actions():
                                'spine': (25, 0, 0), 'neck': (28, 0, 0), 'upperarm_L': (-40, -5, 0), 'forearm_L': (-60, 0, 0), 'upperarm_R': (-10, 10, 0), 'forearm_R': (-20, 0, 0)},
                           40: {'loc': (0, 0, -0.45), 'thigh_L': (-90, 0, 0), 'shin_L': (90, 0, 0), 'thigh_R': (10, 0, 0), 'shin_R': (100, 0, 0), 'foot_R': (30, 0, 0),
                                'spine': (28, 0, 0), 'neck': (34, 0, 0), 'upperarm_L': (-40, -5, 0), 'forearm_L': (-60, 0, 0), 'upperarm_R': (-10, 10, 0), 'forearm_R': (-20, 0, 0)}})
+    # touchdown celebrations (ball stays in the right hand): anticipation, overshoot, settle, head leads the body
+    tuck = {'upperarm_R': (-25, 0, 22), 'forearm_R': (-120, 0, 0), 'hand_R': (-20, 0, 0)}
+    gather = P(rest, tuck, {'loc': (0, 0, -0.07), 'thigh_L': (-22, 0, -3), 'thigh_R': (-22, 0, 3), 'shin_L': (34, 0, 0), 'shin_R': (34, 0, 0), 'spine': (14, 0, 0), 'neck': (-6, 0, 0)})
+    heis = P(tuck, {'loc': (0, 0, -0.03), 'thigh_R': (-82, 0, 6), 'shin_R': (96, 0, 0), 'foot_R': (-25, 0, 0), 'thigh_L': (-8, 0, -2), 'shin_L': (12, 0, 0),
+                    'upperarm_L': (-86, -8, 0), 'forearm_L': (-4, 0, 0), 'hand_L': (45, 0, 0), 'spine': (6, 0, -12), 'chest': (0, 0, -8), 'neck': (-4, 0, 16), 'hips': (0, 0, 4)})
+    A['Heisman'] = (False, {0: P(rest, tuck), 5: gather, 13: P(heis, {'thigh_R': (-88, 0, 6), 'upperarm_L': (-90, -6, 0), 'loc': (0, 0, -0.01)}),
+                            19: heis, 34: P(heis, {'loc': (0.012, 0, -0.03), 'hips': (0, 0, 6), 'neck': (-6, 0, 18)}),
+                            50: P(heis, {'loc': (-0.006, 0, -0.035), 'chest': (0, 0, -10)}), 60: heis})
+    up = P(tuck, {'loc': (0, 0, 0.05), 'foot_L': (26, 0, 0), 'foot_R': (26, 0, 0), 'thigh_L': (-4, 0, -3), 'thigh_R': (-4, 0, 3), 'spine': (-12, 0, 0), 'chest': (-6, 0, 0), 'neck': (-36, 0, 0),
+                  'upperarm_R': (-166, 10, 0), 'forearm_R': (-6, 0, 0), 'hand_R': (0, 0, 0), 'upperarm_L': (-158, -14, 0), 'forearm_L': (-8, 0, 0), 'hand_L': (-10, 0, 0)})
+    A['PointSky'] = (False, {0: P(rest, tuck), 7: gather, 14: P(up, {'loc': (0, 0, 0.09), 'neck': (-42, 0, 0), 'spine': (-16, 0, 0)}), 20: up,
+                             36: P(up, {'upperarm_R': (-150, 14, 0), 'neck': (-30, 0, 6), 'loc': (0, 0, 0.03)}),
+                             48: P(rest, tuck, {'upperarm_L': (-150, -16, 0), 'forearm_L': (-10, 0, 0), 'neck': (-24, 0, -4), 'spine': (-4, 0, 0)}),
+                             60: P(rest, tuck, {'upperarm_L': (-146, -18, 0), 'forearm_L': (-12, 0, 0), 'neck': (-22, 0, -6), 'spine': (-4, 0, 0)})})
+    def shim(m, z):
+        return P(tuck, {'loc': (0.02 * m, 0, z), 'thigh_L': (-30, 0, -6), 'thigh_R': (-30, 0, 6), 'shin_L': (46, 0, 0), 'shin_R': (46, 0, 0), 'foot_L': (-14, 0, 0), 'foot_R': (-14, 0, 0),
+                        'spine': (16, 0, 0), 'chest': (0, 4 * m, 14 * m), 'hips': (0, 0, -6 * m), 'neck': (-10, 0, -8 * m), 'upperarm_L': (-38, -34 - 8 * m, 0), 'forearm_L': (-96, 0, 0),
+                        'upperarm_R': (-30 + 6 * m, 0, 22)})
+    A['Shimmy'] = (True, {0: shim(1, -0.1), 6: shim(-1, -0.07), 12: shim(1, -0.1), 18: shim(-1, -0.07), 24: shim(1, -0.1)})
+    # sack celebrations
+    roar = {'loc': (0, 0, -0.12), 'thigh_L': (-26, 0, -14), 'thigh_R': (-26, 0, 14), 'shin_L': (42, 0, 0), 'shin_R': (42, 0, 0), 'foot_L': (-12, 0, 0), 'foot_R': (-12, 0, 0),
+            'spine': (-16, 0, 0), 'chest': (-8, 0, 0), 'neck': (-34, 0, 0), 'upperarm_L': (-62, -68, 0), 'forearm_L': (-64, 0, 0), 'hand_L': (-30, 0, 0),
+            'upperarm_R': (-62, 68, 0), 'forearm_R': (-64, 0, 0), 'hand_R': (-30, 0, 0)}
+    A['Roar'] = (False, {0: rest, 6: P(crouch, {'loc': (0, 0, -0.17), 'spine': (30, 0, 0)}), 13: P(roar, {'spine': (-22, 0, 0), 'neck': (-42, 0, 0), 'loc': (0, 0, -0.09)}), 19: roar,
+                         28: P(roar, {'chest': (-8, 0, 6), 'neck': (-30, 0, -8)}), 38: P(roar, {'chest': (-8, 0, -6), 'neck': (-32, 0, 8)}), 48: P(roar, {'chest': (-10, 0, 3)}), 60: roar})
+    def lasso(a):
+        return P(rest, {'upperarm_R': (-160, 18 * math.cos(a), 18 * math.sin(a)), 'forearm_R': (-38, 0, 0), 'hand_R': (-20, 0, 0),
+                        'upperarm_L': (-20, -24, 0), 'forearm_L': (-70, 0, 0), 'spine': (-6, 0, 6 * math.sin(a)), 'neck': (-16, 0, -10 * math.sin(a)), 'hips': (0, 0, 4 * math.sin(a)),
+                        'thigh_L': (-14, 0, -6), 'thigh_R': (-14, 0, 6), 'shin_L': (22, 0, 0), 'shin_R': (22, 0, 0), 'loc': (0, 0, -0.04 + 0.015 * math.cos(2 * a))})
+    A['Lasso'] = (True, {f: lasso(2 * math.pi * f / 24) for f in range(0, 25, 4)})
     return A
 
 

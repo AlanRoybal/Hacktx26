@@ -68,7 +68,7 @@ export class Game {
   timeScale = 1; tsTarget = 1;   // slow motion
   stick = [0, 0];                // pocket movement (x = right, y = up/forward)
   qbOff = new THREE.Vector2();
-  sackFx = { dir: v3(), start: v3(), fwd: v3(), hit: 0, mates: [] as Actor[] };
+  sackFx = { dir: v3(), start: v3(), fwd: v3(), hit: 0, mates: [] as Actor[], seq: ['HornsDown', 'SackDance', 'Flex'] };
   private hudT = 0;
   rng = mulberry(Date.now() & 0xffff);
   private jumboUntil = 0;
@@ -917,7 +917,8 @@ export class Game {
     dir.normalize();
     // two nearest teammates come over to celebrate
     const mates = [...this.def.values()].filter(d => d !== r).sort((a, b) => a.pos.distanceTo(r.pos) - b.pos.distanceTo(r.pos)).slice(0, 2);
-    this.sackFx = { dir, start: cam.clone(), fwd: dir.clone().negate(), hit: 0, mates };
+    const seqs = [['HornsDown', 'SackDance', 'Flex'], ['Roar', 'Lasso', 'Flex'], ['HornsDown', 'Roar', 'Shimmy'], ['Roar', 'SackDance', 'Lasso']];
+    this.sackFx = { dir, start: cam.clone(), fwd: dir.clone().negate(), hit: 0, mates, seq: seqs[Math.floor(this.rng() * seqs.length)] };
     this.w.drawJumbo(['SACK!'], '#841617', '#FDF9D8');
     r.data.done = true;
     r.face(cam);
@@ -977,10 +978,10 @@ export class Game {
     if (t < 0.6) r.pos.copy(cam.position).setY(0).addScaledVector(fx.fwd, 0.95 - t * 0.25);
     else if (t > 1.1 && !r.data.cel) {
       r.data.cel = 1;
-      r.pos.copy(spot); r.face(cam.position); r.play('HornsDown', 0.9, 1, true);
+      r.pos.copy(spot); r.face(cam.position); r.play(fx.seq[0], 0.9, 1, true);
       this.sfx('grunt', r.pos, 0.6, 0.8);
     }
-    if (r.data.cel === 1 && t > 1.9) { r.data.cel = 2; r.play('SackDance', 0.25, 1.2); this.audio.playMusic(this.fight(this.defTeam), false, 0.8); this.w.jumboLive(); }
+    if (r.data.cel === 1 && t > 1.9) { r.data.cel = 2; r.play(fx.seq[1], 0.25, fx.seq[1] === 'Roar' ? 1 : 1.15, fx.seq[1] === 'Roar'); this.audio.playMusic(this.fight(this.defTeam), false, 0.8); this.w.jumboLive(); }
     fx.mates.forEach((m, i) => {
       m.data.done = true;
       const side = (i === 0 ? 1 : -1);
@@ -989,7 +990,7 @@ export class Game {
       if (t > 2.6 && !m.data.bump) { m.data.bump = 1; m.vel.set(0, 0, 0); if (i === 0) m.pos.lerp(r.pos.clone().add(m.pos.clone().sub(r.pos).setLength(0.8)), 1); m.face(r.pos); m.play('ChestBump', 0.15, 1, true); if (i === 0) { r.face(m.pos); r.play('ChestBump', 0.15, 1, true); r.data.cel = 3; this.audio.play('crowd_roar', 0.5, 0.9, 'crowd'); } setTimeout(() => this.sfx('hit_pads', m.pos, 0.7, 1.2), 450); }
       if (t > 3.6 && m.data.bump === 1) { m.data.bump = 2; m.face(cam.position); m.play(i === 0 ? 'Celebrate' : 'HornsDown', 0.3, 1, i !== 0); }
     });
-    if (r.data.cel === 3 && t > 4.0) { r.data.cel = 4; r.face(cam.position); r.play('Flex', 0.25); }
+    if (r.data.cel === 3 && t > 4.0) { r.data.cel = 4; r.face(cam.position); r.play(fx.seq[2], 0.25); }
     if (t > 3.4 && this.sackPlayT >= 0) { this.startReplay(this.sackPlayT - 2.2, this.sackPlayT + 1.0); this.sackPlayT = -1; }
     // QB's own arm flails up on the hit, then drops out of view
     this.w.fpArm.visible = t < 0.8;
@@ -1299,7 +1300,9 @@ export class Game {
     this.audio.call('td', true, 0.4);
     this.refSignal('td', c.pos);
     this.coachReact('Celebrate', 6);
-    c.play('Celebrate', 0.2); c.vel.set(0, 0, 0); c.data.done = true;
+    const cel = (['Heisman', 'PointSky', 'Celebrate'] as const)[Math.floor(this.rng() * 3)];
+    c.data.cel = cel; c.data.cel2 = cel === 'Heisman' ? 'Celebrate' : 'Shimmy';
+    c.play(cel, 0.2, 1, cel !== 'Celebrate'); c.vel.set(0, 0, 0); c.data.done = true;
     if (this.offTeam === 'tex') this.tex += 7; else this.ou += 7;
     this.clock = Math.max(1, this.clock - Math.ceil(this.playT));
     this.h.banner('TOUCHDOWN', this.offName, this.offTeam === 'tex' ? '#BF5700' : '#841617');
@@ -1312,7 +1315,7 @@ export class Game {
     this.spikeTex = 1.3;
     this.w.post.mat.uniforms.uFlash.value = 0.25;
     this.h.rumble([[220, 1, 180], [120, 0, 0], [220, 1, 180], [120, 0, 0], [400, 1, 120]], true);
-    for (const p of ELIGIBLE) if (this.off.get(p) !== c && this.off.get(p)!.pos.distanceTo(c.pos) < 25) { this.off.get(p)!.data.done = true; this.off.get(p)!.play('Celebrate', 0.3); }
+    for (const p of ELIGIBLE) if (this.off.get(p) !== c && this.off.get(p)!.pos.distanceTo(c.pos) < 25) { this.off.get(p)!.data.done = true; this.off.get(p)!.play(['Celebrate', 'Shimmy', 'Flex'][Math.floor(this.rng() * 3)], 0.3, 0.9 + this.rng() * 0.25); }
     [...this.def.values()].sort((p, q) => p.pos.distanceTo(c.pos) - q.pos.distanceTo(c.pos)).forEach((d, i) => {
       d.vel.set(0, 0, 0); d.data.done = true; d.play('Idle', 0.4);
       d.data.sad = i === 0 ? 'Kneel' : i === 1 ? 'KickTurf' : i % 3 === 0 ? 'DropReact' : 'Dejected';
@@ -1329,6 +1332,7 @@ export class Game {
     cam.position.lerp(new THREE.Vector3(c.pos.x + Math.sin(a) * r, 1.4 + this.t * 0.25, c.pos.z + Math.cos(a) * r), Math.min(1, dt * 3));
     this.lookAt.lerp(c.pos.clone().setY(1.3), Math.min(1, dt * 4));
     cam.up.set(0, 1, 0);
+    if (c.data.cel2 && this.t > 2.1) { c.play(c.data.cel2, 0.45); c.data.cel2 = undefined; }
     for (const d of this.def.values()) if (d.data.sadT !== undefined && (d.data.sadT -= dt) <= 0) {
       d.data.sadT = undefined; d.play(d.data.sad, 0.35, 0.8 + this.rng() * 0.35, d.data.sad !== 'Dejected');
     }
