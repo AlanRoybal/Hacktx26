@@ -111,6 +111,43 @@ export class World {
   pixel = true;
   frame = 0;
 
+  private fx: { pts: THREE.Points; vel: Float32Array; age: number; life: number; grav: number }[] = [];
+  private fxT = 0;
+  private fxTex?: THREE.Texture;
+  /** Particle burst: fireworks (fast, falling, additive) or tunnel smoke (slow, rising). */
+  burst(pos: THREE.Vector3, color: string, n = 140, speed = 10, grav = -5, size = 1.4, life = 2.2, additive = true) {
+    const p = new Float32Array(n * 3), v = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      p.set([pos.x, pos.y, pos.z], i * 3);
+      const u = Math.random() * 2 - 1, a = Math.random() * Math.PI * 2, r = Math.sqrt(1 - u * u), sp = speed * (0.6 + Math.random() * 0.4);
+      v.set([r * Math.cos(a) * sp, u * sp, r * Math.sin(a) * sp], i * 3);
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+    this.fxTex ??= (() => {
+      const c = document.createElement('canvas'); c.width = c.height = 32; const x = c.getContext('2d')!;
+      const gr = x.createRadialGradient(16, 16, 0, 16, 16, 16); gr.addColorStop(0, '#fff'); gr.addColorStop(0.4, 'rgba(255,255,255,.6)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      x.fillStyle = gr; x.fillRect(0, 0, 32, 32); return new THREE.CanvasTexture(c);
+    })();
+    const m = new THREE.PointsMaterial({ color, size, map: this.fxTex, transparent: true, opacity: 1, fog: !additive, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending });
+    const pts = new THREE.Points(g, m); pts.frustumCulled = false;
+    this.scene.add(pts); this.fx.push({ pts, vel: v, age: 0, life, grav });
+  }
+  clearFx() {
+    this.fx.forEach(f => { this.scene.remove(f.pts); f.pts.geometry.dispose(); (f.pts.material as THREE.Material).dispose(); });
+    this.fx = [];
+  }
+  private updateFx(t: number) {
+    const dt = Math.min(0.05, Math.max(0, t - this.fxT)); this.fxT = t;
+    this.fx = this.fx.filter(f => {
+      f.age += dt;
+      const a = f.pts.geometry.attributes.position as THREE.BufferAttribute, P = a.array as Float32Array;
+      for (let i = 0; i < P.length; i += 3) { f.vel[i + 1] += f.grav * dt; f.vel[i] *= 0.985; f.vel[i + 2] *= 0.985; P[i] += f.vel[i] * dt; P[i + 1] += f.vel[i + 1] * dt; P[i + 2] += f.vel[i + 2] * dt; }
+      a.needsUpdate = true;
+      (f.pts.material as THREE.PointsMaterial).opacity = Math.max(0, 1 - f.age / f.life);
+      if (f.age < f.life) return true;
+      this.scene.remove(f.pts); f.pts.geometry.dispose(); (f.pts.material as THREE.Material).dispose(); return false;
+    });
+  }
   quality: 'low' | 'high' = 'high';
   /** Low: no shadow map, 60% of the crowd instances, smaller internal render target. */
   setQuality(q: 'low' | 'high') {
@@ -159,7 +196,8 @@ export class World {
       const m = o as THREE.Mesh;
       if (!m.isMesh) return;
       const mat = m.material as THREE.MeshStandardMaterial;
-      if (m.name === 'big_tex') { mat.fog = false; mat.emissive.copy(mat.color); mat.emissiveIntensity = 0.35; return; }   // floodlit at night
+      let bt = false; m.traverseAncestors(a => { bt ||= a.name === 'big_tex'; });
+      if (bt || m.name.startsWith('big_tex')) { mat.fog = false; mat.emissive.copy(mat.color); mat.emissiveMap = mat.map; mat.emissiveIntensity = 0.9; return; }   // floodlit at night
       if (mat.emissiveIntensity > 0 && mat.emissive.getHex()) { mat.fog = false; mat.emissiveIntensity = 4; this.fairLights.push(mat); }
     });
     this.scene.add(fair.scene);
@@ -455,6 +493,7 @@ export class World {
   }
 
   render(t: number) {
+    this.updateFx(t);
     this.frame++;
     this.renderer.info.reset();
     const replay = this.jumboMode === 'replay' && this.replayHook;

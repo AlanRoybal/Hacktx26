@@ -129,6 +129,16 @@ export class Audio {
     this.music.gain.setTargetAtTime(0.5, now + delay + b.duration, 0.6);
   }
 
+  /** Long recorded voice piece (booth intro) on the voice bus; stopVoice() cuts it when the intro is skipped. */
+  voiceClip(name: Clip, gain = 1) {
+    const b = this.buf.get(name); if (!b || !this.started) return;
+    try { this.voiceSrc?.stop(); } catch { /* done */ }
+    const src = this.ctx.createBufferSource(), g = this.ctx.createGain(); g.gain.value = gain;
+    src.buffer = b; src.connect(g).connect(this.voice); src.start();
+    this.voiceSrc = src; this.voiceUntil = this.ctx.currentTime + b.duration;
+  }
+  stopVoice() { try { this.voiceSrc?.stop(); } catch { /* done */ } this.voiceSrc = null; this.voiceUntil = 0; }
+
   duck(on: boolean) { this.music.gain.setTargetAtTime(on ? 0.22 : 0.55, this.ctx.currentTime, 0.3); }
 
   /** hype 0..1, pressure 0..1 */

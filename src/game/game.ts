@@ -5,7 +5,7 @@ import { PLAYS, OFF_SPOT, DEF_SPOT, OFF_NUM, DEF_NUM, OFF_NAME, DEF_NAME, ELIGIB
 import type { ThrowEvent } from '../input/types';
 import type { Audio, Clip } from '../audio';
 
-export type State = 'TITLE' | 'PRESNAP' | 'SNAP' | 'POCKET' | 'AIR' | 'RUN' | 'SACK' | 'SCRAMBLE' | 'TACKLED' | 'DEAD' | 'CUTSCENE' | 'OVER';
+export type State = 'TITLE' | 'INTRO' | 'PRESNAP' | 'SNAP' | 'POCKET' | 'AIR' | 'RUN' | 'SACK' | 'SCRAMBLE' | 'TACKLED' | 'DEAD' | 'CUTSCENE' | 'OVER';
 type Result = { kind: 'catch' | 'inc' | 'int' | 'sack' | 'fumble' | 'td' | 'pi' | 'run'; yards: number; time: number; oob?: boolean; why?: string };
 
 export interface Hooks {
@@ -87,6 +87,40 @@ export class Game {
   private benchT = 0;
   private deadHold = 1.8;
   private cadT = 0;
+  private fromIntro = false;
+  private fxT = 0;
+  /** Pre-game: aerial, smoke tunnel run-out, Big Tex, fireworks, push in to the huddle. Booth voices over the top. */
+  startIntro() {
+    this.state = 'INTRO'; this.t = 0; this.fxT = 0;
+    this.audio.start(); this.h.screen('none', this);
+    this.audio.voiceClip('booth_intro', 1);
+    [...this.off.values()].forEach((a, i) => { a.pos.set(-26 + (i % 3) * 1.4, 0, -58 - Math.floor(i / 3) * 1.6); a.data = { delay: 9.5 + i * 0.25 }; a.play('Idle', 0.1); });
+    this.w.mosaicTarget = 1;
+  }
+  private intro(dt: number) {
+    const t = this.t, cam = this.w.camera, V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+    const shot = (from: THREE.Vector3, to: THREE.Vector3, at: THREE.Vector3, k: number) => { cam.position.lerpVectors(from, to, THREE.MathUtils.smoothstep(k, 0, 1)); this.lookAt.copy(at); };
+    if (t < 9) { const a = 0.4 + t * 0.09; cam.position.set(Math.sin(a) * 95, 55 - t * 2, Math.cos(a) * 110); this.lookAt.set(0, 0, 0); }
+    else if (t < 17) shot(V(-12, 2.4, -44), V(-17, 1.9, -36), V(-26, 1.6, -52), (t - 9) / 8);
+    else if (t < 24) shot(V(36, 4, 126), V(44, 9, 136), V(70, 30, 175), (t - 17) / 7);
+    else if (t < 31) shot(V(0, 18, -30), V(0, 24, -20), V(0, 46, 35), (t - 24) / 7);
+    else shot(V(0, 12, this.losZ - 30), V(this.qb.x, this.qb.y, this.qb.z), V(0, 1.5, this.losZ + 22), (t - 31) / 6.5);
+    cam.up.set(0, 1, 0);
+    for (const a of this.off.values()) {   // Longhorns run out of the tunnel toward the sideline
+      if (t < a.data.delay) continue;
+      const goal = V(-24 + (a.data.delay * 7 % 6), 0, -20 + (a.data.delay * 13 % 30));
+      this.moveTo(a, goal, 6.5, dt);
+      if (a.pos.distanceTo(goal) > 0.5) { a.play('Run', 0.2, 1.1); a.heading = Math.atan2(a.vel.x, a.vel.z); } else a.play('Celebrate', 0.3);
+    }
+    if ((this.fxT -= dt) <= 0) {
+      if (t > 9 && t < 17) { this.w.burst(V(-26 + Math.random() * 2, 1, -59), '#9a9a9a', 60, 2.2, 0.8, 2.2, 3, false); this.fxT = 0.25; }
+      else if (t > 24 && t < 31) { const c = ['#FF6A13', '#FFFFFF', '#BF5700', '#FFD27A'][Math.floor(Math.random() * 4)]; this.w.burst(V((Math.random() - 0.5) * 70, 38 + Math.random() * 18, 10 + Math.random() * 50), c); this.fxT = 0.3; this.audio.play('cannon', 0.25, 1.6 + Math.random() * 0.4); }
+      else this.fxT = 0.2;
+    }
+    if (t > 17.5 && t - dt <= 17.5) this.audio.play('bigtex_howdy', 1.2);
+    if (t > 24 && t - dt <= 24) { this.spikeTex = 1.2; this.audio.play('crowd_roar', 0.9, 1, 'crowd'); }
+    if (t > 37.5) { this.fromIntro = true; this.start(); }
+  }
   menu = { page: 'home' as 'home' | 'settings', sel: 0 };
   settings = Object.assign({ quality: 'auto', music: 7, voice: 7, crowd: 7, hand: 'auto' }, JSON.parse(localStorage.getItem('rrqb_settings') || '{}')) as
     { quality: 'auto' | 'low' | 'high'; music: number; voice: number; crowd: number; hand: 'auto' | 'R' | 'L' };
@@ -112,7 +146,7 @@ export class Game {
   }
   menuSelect() {
     if (this.menu.page === 'home') {
-      if (this.menu.sel === 0) return this.start();
+      if (this.menu.sel === 0) return this.startIntro();
       this.menu = { page: 'settings', sel: 0 };
     } else {
       const row = Game.SETTINGS_ROWS[this.menu.sel];
@@ -181,12 +215,14 @@ export class Game {
   }
 
   start() {
+    this.w.clearFx();
     this.audio.start();
     this.resetDrive();
     this.h.screen('none', this);
     this.h.banner('TEXAS BALL', `OU ${this.ballOn}  |  DOWN 4  |  1:45 LEFT`);
     this.audio.playMusic('wabash', false);
-    this.audio.call('intro', true, 0.6);
+    if (!this.fromIntro) this.audio.call('intro', true, 0.6);
+    this.fromIntro = false;
     this.toPresnap();
   }
 
@@ -277,6 +313,7 @@ export class Game {
 
   onTrigger(down: boolean) {
     if (down && this.state === 'OVER' && this.entry) { if (this.t > 1.3) this.entryConfirm(); return; }
+    if (down && this.state === 'INTRO') { if (this.t > 1) { this.audio.stopVoice(); this.start(); } return; }
     if (down && this.state === 'TITLE') { if (this.t > 0.4) this.menuSelect(); return; }
     if (down && this.state === 'OVER' && this.t > Math.max(2, this.overT + 1)) { this.toTitle(); return; }
     if (down && this.state === 'PRESNAP' && this.t > 0.6) this.snap();
@@ -435,6 +472,7 @@ export class Game {
       this.w.camera.position.set(Math.sin(a) * 55, 48, Math.cos(a) * 75);
       this.w.camera.lookAt(0, 0, 0);
     }
+    if (s === 'INTRO') this.intro(dt);
     if (s === 'PRESNAP') this.presnapIdle();
     if (s === 'PRESNAP' && this.cadT && this.t > this.cadT) {   // QB barks the cadence once the play is set
       this.cadT = 0;
