@@ -51,3 +51,8 @@ canvas#c { position: fixed; inset: 0; width: 100vw; height: 100vh; image-renderi
 body.paused #plays, body.paused #hint, body.paused #stat, body.paused #banner { display: none; }
 #screen .qr { display: flex; flex-direction: column; align-items: center; gap: 1.2vh; } #screen .qr img { width: 24vh; height: 24vh; image-rendering: pixelated; border: 6px solid #BF5700; }
 #screen .qr h2 { font-size: 1.8vh; letter-spacing: .3em; color: #FF8A2A; } #screen .qrwait { width: 24vh; height: 24vh; display: flex; align-items: center; justify-content: center; border: 6px dashed #5E2400; color: #8a7a68; font-size: 1.8vh; letter-spacing: .2em; }
+body.potg #plays, body.potg #hint, body.potg #stat, body.potg #banner, body.potg #pill { display: none; }
+#potg { display: none; position: fixed; left: 4vw; bottom: 9vh; flex-direction: column; gap: .6vh; pointer-events: none; z-index: 20; }
+body.potg #potg { display: flex; }
+#potg b { font: 900 7vh Impact, "Arial Black", sans-serif; letter-spacing: .06em; color: #fff; text-shadow: .5vh .5vh 0 #BF5700; }
+#potg span { font: bold 2.6vh "Courier New", monospace; letter-spacing: .3em; color: #FF8A2A; background: rgba(0,0,0,.6); padding: .6vh 1.2vh; align-self: flex-start; }

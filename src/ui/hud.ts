@@ -63,6 +63,10 @@ export function makeHud(buzz: (ms: number, amp?: number) => void, rumble: Hooks[
       $('scorebug').style.display = kind === 'title' ? 'none' : 'flex';
       g.w.showUI(false);
       document.body.classList.toggle('paused', kind === 'pause' || kind === 'handoff');
+      document.body.classList.toggle('potg', g.state === 'POTG');
+      let pg = document.getElementById('potg');
+      if (!pg) { pg = document.createElement('div'); pg.id = 'potg'; document.body.appendChild(pg); }
+      if (g.state === 'POTG' && g.best) pg.innerHTML = `<b>PLAY OF THE GAME</b><span>${g.best.team}  ·  ${g.best.label}</span>`;
       if (kind === 'none') { el.classList.remove('on'); return; }
       if (kind === 'title' || kind === 'pause' || kind === 'handoff') { el.classList.remove('on'); drawTitle(g.w.uiCtx, g, kind); g.w.showUI(true); return; }
       {

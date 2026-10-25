@@ -72,10 +72,10 @@ async function saveClip(frames: Uint8ClampedArray[]) {
   const refresh = () => { if (game.state === 'OVER' && game.t > 1) game.h.screen('over', game); };
   game.clip = { status: 'saving' }; refresh();
   const gif = GIFEncoder();
-  for (const f of frames) {
-    const pal = quantize(f, 256);
+  for (let i = 0; i < frames.length; i++) {
+    const f = frames[i], pal = quantize(f, 256);
     gif.writeFrame(applyPalette(f, pal), CAP_W, CAP_H, { palette: pal, delay: 66 });
-    await new Promise(r => setTimeout(r, 0));
+    if (i % 12 === 11) await new Promise(r => setTimeout(r, 0));
   }
   gif.finish();
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
