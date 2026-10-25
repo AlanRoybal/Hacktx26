@@ -1,10 +1,13 @@
 import * as THREE from 'three';
+import { Sky } from 'three/examples/jsm/objects/Sky.js';
+import { Jets } from './jets';
 import { Beams } from './beams';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 export const YD = 0.9144;
 export const OU_GOAL_Z = 50 * YD;           // three +z = toward the OU end zone (blender -y)
 const PYLON_X = 24.4;
+const SUN_DIR = new THREE.Vector3(-0.7, 0.42, -0.5).normalize();
 const PROP_SPOTS: Record<string, [number, number, number]> = {   // three x, z, yaw
   goalpost_home: [0, 60 * YD, Math.PI], goalpost_away: [0, -60 * YD, 0],
   pylon_0: [-PYLON_X, 50 * YD, 0], pylon_1: [PYLON_X, 50 * YD, 0], pylon_2: [-PYLON_X, 60 * YD, 0], pylon_3: [PYLON_X, 60 * YD, 0],
@@ -129,6 +132,7 @@ export class World {
   private showLights: THREE.SpotLight[] = [];
   private towerLights: THREE.SpotLight[] = [];
   crowd: CrowdPart[] = [];
+  jets = new Jets();
   crowdUniforms = { uTime: { value: 0 }, uHypeTex: { value: 0 }, uHypeOU: { value: 0 }, uWave: { value: -10 } };
   mosaicU = { value: 0 };
   mosaicTarget = 1;
@@ -215,12 +219,13 @@ export class World {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(1);
     this.renderer.toneMapping = THREE.NeutralToneMapping;
-    this.renderer.toneMappingExposure = 1.3;
+    this.renderer.toneMappingExposure = 1.15;
     this.renderer.shadowMap.enabled = true;
     this.renderer.info.autoReset = false;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
-    this.scene.background = new THREE.Color('#05070D');
-    this.scene.fog = new THREE.FogExp2('#06080f', 0.0105);
+    this.scene.background = new THREE.Color('#E8B98C');
+    this.scene.fog = new THREE.FogExp2('#E2B48C', 0.0032);
+    this.scene.add(this.jets.group);
     this.scene.add(this.camera);
     this.scene.add(this.env);
     this.rt.texture.colorSpace = THREE.SRGBColorSpace;
@@ -245,7 +250,7 @@ export class World {
       if (!m.isMesh) return;
       const mat = m.material as THREE.MeshStandardMaterial;
       let bt = false; m.traverseAncestors(a => { bt ||= a.name === 'big_tex'; });
-      if (bt || m.name.startsWith('big_tex')) { mat.fog = false; mat.emissive.copy(mat.color); mat.emissiveMap = mat.map; mat.emissiveIntensity = 0.18; return; }   // floodlit at night
+      if (bt || m.name.startsWith('big_tex')) { mat.fog = false; mat.emissive.copy(mat.color); mat.emissiveMap = mat.map; mat.emissiveIntensity = 0.04; return; }
       if (mat.emissiveIntensity > 0 && mat.emissive.getHex()) { mat.fog = false; mat.emissiveIntensity = 4; this.fairLights.push(mat); }
     });
     this.env.add(fair.scene);
@@ -343,7 +348,17 @@ export class World {
   }
 
   private buildLights(stadium: THREE.Object3D) {
-    this.scene.add(new THREE.HemisphereLight('#1c2740', '#0b0d08', 0.35));
+    this.scene.add(new THREE.HemisphereLight('#FFE2BD', '#6A5A40', 2.0));
+    const sun = new THREE.DirectionalLight('#FFC78A', 4.5);   // late afternoon: low sun in the west, long shadows across the field
+    sun.position.copy(SUN_DIR).multiplyScalar(160);
+    sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004;
+    Object.assign(sun.shadow.camera, { left: -90, right: 90, top: 90, bottom: -90, near: 10, far: 420 });
+    this.scene.add(sun, sun.target);
+    const sky = new Sky(); sky.scale.setScalar(550);
+    const su = sky.material.uniforms;
+    su.turbidity.value = 9; su.rayleigh.value = 2.6; su.mieCoefficient.value = 0.01; su.mieDirectionalG.value = 0.85; su.sunPosition.value.copy(SUN_DIR);
+    this.scene.add(sky);
+    this.beamFx.group.visible = false;
     const SHOW = [[-30, -92, 14], [25, -94, 14], [-60, -30, 12], [60, -35, 12], [-58, 30, 12], [58, 40, 12], [-20, 95, 14], [30, 92, 14]]
       .map(([x, y, z]) => new THREE.Vector3(x, z, -y));
     this.env.add(this.beamFx.group);
@@ -351,11 +366,10 @@ export class World {
     for (let i = 0; i < 4; i++) {
       const lamps = stadium.getObjectByName(`tower_${i}_lamps`)!;
       const head = new THREE.Box3().setFromObject(lamps).getCenter(new THREE.Vector3());
-      const L = new THREE.SpotLight('#FFF0D6', 9000, 260, THREE.MathUtils.degToRad(30), 0.5, 1.6);
+      const L = new THREE.SpotLight('#FFF0D6', 1500, 260, THREE.MathUtils.degToRad(30), 0.5, 1.6);
       L.position.copy(head);
       L.target.position.set(head.x * 0.15, 0, head.z * 0.35);
-      if (i === 0) { L.castShadow = true; L.shadow.mapSize.set(1024, 1024); L.shadow.camera.near = 40; L.shadow.camera.far = 200; L.shadow.bias = -0.0005; }
-      this.env.add(L, L.target);
+            this.env.add(L, L.target);
       this.towerLights.push(L);
       glow = this.beamFx.addTower(head, L.target.position, glow);
       for (const tg of [...SHOW].sort((a, b) => a.distanceTo(head) - b.distanceTo(head)).slice(0, 2)) {
@@ -543,7 +557,7 @@ export class World {
     const showCol = new THREE.Color(ou > tex ? '#C41E1E' : '#FF5A00');
     for (const m of this.lampShow) { m.emissive.copy(peak > 0.55 ? showCol : new THREE.Color('#FFF3DC')); m.emissiveIntensity = peak > 0.55 ? 8 * strobe : 6; }
     for (const m of this.lamp) m.emissiveIntensity = 6 + 6 * peak;
-    for (const L of this.towerLights) L.intensity = 9000 * (1 + 0.35 * peak);
+    for (const L of this.towerLights) L.intensity = 1500 * (1 + 0.35 * peak);
     this.beamFx.update(t, peak, strobe, showCol, this.showLights);
     this.showLights.forEach((S, i) => {
       S.color.copy(showCol);
@@ -615,6 +629,7 @@ export class World {
 
   render(t: number) {
     this.updateFx(t);
+    this.jets.update(t);
     this.updateTrail();
     this.frame++;
     this.renderer.info.reset();

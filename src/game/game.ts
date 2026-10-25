@@ -130,6 +130,13 @@ export class Game {
       else if (t > 24 && t < 31) { const c = ['#FF6A13', '#FFFFFF', '#BF5700', '#FFD27A'][Math.floor(Math.random() * 4)]; this.w.burst(V((Math.random() - 0.5) * 70, 38 + Math.random() * 18, 10 + Math.random() * 50), c); this.fxT = 0.3; this.audio.play('cannon', 0.25, 1.6 + Math.random() * 0.4); }
       else this.fxT = 0.2;
     }
+    for (const c of [0.35, 1.3]) if (t > c && t - dt <= c) {   // Smokey fires to open the broadcast
+      const s = this.w.propObjs.get('smokey')!.position;
+      this.audio.play('cannon', 1); this.w.shake = 0.5;
+      this.w.burst(V(s.x, 1.6, s.z), '#f4f1ea', 90, 7, 0.6, 3.2, 3.5, false);
+      this.w.burst(V(s.x, 1.6, s.z), '#FFB347', 40, 12, -2, 1.4, 0.35, true);
+    }
+    if (t > 2 && t - dt <= 2) { this.w.jets.fly(2); this.audio.play('jet_flyover', 1); }   // four-ship flyover crosses midfield at t = 4
     if (t > 17.5 && t - dt <= 17.5) this.audio.play('bigtex_howdy', 1);
     if (t > 24 && t - dt <= 24) { this.spikeTex = 1.2; this.audio.play('crowd_roar', 0.9, 1, 'crowd'); }
     if (t > 37.5) { this.fromIntro = true; this.start(); }
